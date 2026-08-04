@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>ServerCharacters</AssemblyName>
+    <RootNamespace>ServerCharacters</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <!-- Suppress auto-generated AssemblyInfo so Plugin.cs controls version -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Configurations>Debug;Release</Configurations>
+  </PropertyGroup>
+
+  <!--
+    All DLLs referenced here must be copied to the libs/ folder.
+    See libs/COPY_DLLS_HERE.md for exact paths.
+  -->
+  <ItemGroup>
+    <!--
+      Required to target .NET Framework 4.7.2 when only the .NET 8 SDK is installed.
+      PrivateAssets=all means this is a build-time-only dependency — not shipped with the mod.
+    -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <Reference Include="assembly_valheim">
+      <HintPath>libs\assembly_valheim.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>libs\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>libs\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>libs\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>libs\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!--
+      Newtonsoft.Json is pulled from NuGet automatically — no need to copy the DLL manually.
+      ExcludeAssets=runtime means it won't be embedded in our output DLL;
+      BepInEx already ships its own copy that will be used at runtime.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!--
+    Post-build: automatically deploy the compiled DLL to BepInEx plugins folder.
+    Update the path below to match your Valheim server installation.
+  -->
+  <Target Name="DeployToServer" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <PropertyGroup>
+      <ValheimPluginsPath>C:\ValheimServer\BepInEx\plugins\ServerCharacters\</ValheimPluginsPath>
+    </PropertyGroup>
+    <MakeDir Directories="$(ValheimPluginsPath)" />
+    <Copy
+      SourceFiles="$(TargetDir)$(TargetFileName)"
+      DestinationFolder="$(ValheimPluginsPath)"
+      SkipUnchangedFiles="true" />
+    <Message Text="[ServerCharacters] Deployed to $(ValheimPluginsPath)" Importance="high" />
+  </Target>
+
+</Project>

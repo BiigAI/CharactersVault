@@ -1,0 +1,69 @@
+valheim-server  | Jun 13 00:44:22 supervisord: valheim-server [Info   :ServerCharacters] [ServerCharacters] Player joining: playerId=76561198132796198, Character='AlrickMonkbiter'
+valheim-server  | Jun 13 00:44:38 supervisord: valheim-server 06/13/2026 00:44:38: Got character ZDOID from AlrickMonkbiter : 1136930300:2
+valheim-server  | Jun 13 00:45:00 crond[24]: USER valheim pid 288 cmd [ -f "/var/run/valheim/valheim-updater.pid" ] && kill -HUP $(cat /var/run/valheim/valheim-updater.pid)
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater DEBUG - [41] - Received signal to check for update
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater DEBUG - [41] - Kernel: Linux 33f730e24e1f 6.8.0-124-generic #124-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 13:00:45 UTC 2026 x86_64 GNU/Linux
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater DEBUG - [41] - Found CPU with 800.001 MHz
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater DEBUG - [41] - Memory total/free/available: 16314664/314724/11086172
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater DEBUG - [41] - Storage configuration:
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater Filesystem                         Size  Used Avail Use% Mounted on
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater overlay                            232G  202G   20G  92% /
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater /dev/mapper/ubuntu--vg-ubuntu--lv  232G  202G   20G  92% /config
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater overlay / overlay rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/156/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/133/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/132/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/131/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/130/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/129/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/128/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/124/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/157/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/157/work,nouserxattr 0 0
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater /dev/mapper/ubuntu--vg-ubuntu--lv /config ext4 rw,relatime 0 0
+valheim-server  | Jun 13 00:45:02 supervisord: valheim-updater /dev/mapper/ubuntu--vg-ubuntu--lv /opt/valheim ext4 rw,relatime 0 0
+valheim-server  | Jun 13 00:45:03 supervisord: valheim-updater DEBUG - [41] - Players connected to Valheim server - skipping update check
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Loading dungeon
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Dungeon loaded with 0 rooms from old format in 0.598 ms.
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Generating DG_ForestCrypt(Clone), Seed: -471126092, Bounds diff: (-41.17, -32.00, -21.08) / (22.83, 32.00, 42.92)
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Available rooms:18
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: To place:40
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Connections 4
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: placed 7 doors
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Placed 32 rooms
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Placed locations in zone -5,-9  duration 88.141 ms
+valheim-server  | Jun 13 00:45:09 supervisord: valheim-server 06/13/2026 00:45:09: Placed locations in zone 0,-9  duration 0.26 ms
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Loading dungeon
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Dungeon loaded with 0 rooms from old format in 0.119 ms.
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Generating DG_MeadowsFarm(Clone), Seed: -518538616, Bounds diff: (-32.00, -32.00, -32.00) / (32.00, 32.00, 32.00)
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Available rooms:13
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: To place:30
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Placed 11 rooms
+valheim-server  | Jun 13 00:45:12 supervisord: valheim-server 06/13/2026 00:45:12: Placed locations in zone -1,-9  duration 119.275 ms
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Loading dungeon
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Dungeon loaded with 0 rooms from old format in 0.123 ms.
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Generating DG_ForestCrypt(Clone), Seed: -473074017, Bounds diff: (-32.16, -32.00, -38.06) / (31.84, 32.00, 25.94)
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Available rooms:18
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: To place:40
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Connections 4
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: All required rooms have been placed, stopping generation
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: placed 7 doors
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Placed 39 rooms
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Placed locations in zone 1,-9  duration 55.882 ms
+valheim-server  | Jun 13 00:45:21 supervisord: valheim-server 06/13/2026 00:45:21: Placed locations in zone 1,-7  duration 10.845 ms
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: RPC_Disconnect
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:166 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:2 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:104 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:152 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:127 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Destroying abandoned non persistent zdo 1136930300:93 owner 1136930300
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Disposing socket
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Closing socket 76561198132796198
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10:   send queue size:0
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Disposing socket
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Got status changed msg k_ESteamNetworkingConnectionState_ClosedByPeer
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Socket closed by peer Steamworks.SteamNetConnectionStatusChangedCallback_t
+valheim-server  | Jun 13 00:46:10 supervisord: valheim-server 06/13/2026 00:46:10: Got status changed msg k_ESteamNetworkingConnectionState_None
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Got status changed msg k_ESteamNetworkingConnectionState_Connecting
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: New connection
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Accepting connection k_EResultOK
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Connecting to Steamworks.SteamNetworkingIdentity
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Got status changed msg k_ESteamNetworkingConnectionState_Connected
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Connected
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Got connection SteamID 76561198132796198
+valheim-server  | Jun 13 00:47:43 supervisord: valheim-server 06/13/2026 00:47:43: Got handshake from client 76561198132796198
+valheim-server  | Jun 13 00:47:45 supervisord: valheim-server 06/13/2026 00:47:45: Network version check, their:36, mine:36
+valheim-server  | Jun 13 00:47:45 supervisord: valheim-server 06/13/2026 00:47:45: Server: New peer connected,sending global keys
+valheim-server  | Jun 13 00:47:45 supervisord: valheim-server [Info   :ServerCharacters] [ServerCharacters] Player joining: playerId=76561198132796198, Character='AlrickMonkbiter'
+valheim-server  | Jun 13 00:48:00 supervisord: valheim-server 06/13/2026 00:48:00: Got character ZDOID from AlrickMonkbiter : 1594241051:5

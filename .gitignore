@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# Referenced game DLLs (copy from game install - do not commit)
+libs/*.dll
+
+# IDE files
+.vs/
+*.user
+*.suo
+.idea/
+
+# BepInEx auto-generated files
+BepInEx/
+
+# OS
+.DS_Store
+Thumbs.db
