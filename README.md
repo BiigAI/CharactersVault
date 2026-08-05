@@ -1,4 +1,4 @@
-# ServerCharacters
+﻿# CharactersVault
 
 A **client + server** BepInEx mod for Valheim that enforces one character per player and prevents offline progression cheating by making the server the authoritative source of all character data.
 
@@ -23,10 +23,14 @@ A **client + server** BepInEx mod for Valheim that enforces one character per pl
 ## Installation
 
 1. Install [BepInEx](https://valheim.thunderstore.io/package/denikson/BepInExPack_Valheim/) on your Valheim **dedicated server** AND on all **client machines**.
-2. Drop `ServerCharacters.dll` into `BepInEx/plugins/ServerCharacters/` on **both**.
+2. Drop `CharactersVault.dll` into `BepInEx/plugins/CharactersVault/` on **both**.
 3. Start the server. The first run creates the config and data files.
 
 > **Important**: Players without the mod will be kicked immediately on join attempt. This is intentional.
+
+### Upgrading from CharacterVault
+
+Install `CharactersVault.dll` on the server and every client, then remove the old `CharacterVault.dll`. Do not leave both DLLs installed: they use the same plugin GUID and would load as duplicate copies. Existing `CharacterVault.cfg` configuration and `BepInEx/config/CharacterVault/` vault data are preserved automatically.
 
 ---
 
@@ -42,7 +46,7 @@ dotnet build -c Debug
 
 ## Configuration
 
-Edit `BepInEx/config/ServerCharacters.cfg`. Changes take effect on the next player join.
+Edit `BepInEx/config/CharacterVault.cfg`. This compatibility filename is retained so existing configurations continue working. Changes take effect on the next player join.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -63,10 +67,10 @@ Edit `BepInEx/config/ServerCharacters.cfg`. Changes take effect on the next play
 
 ### File-Based (Recommended for Headless Servers)
 
-All data lives in `BepInEx/config/ServerCharacters/` on the **server**:
+All data lives in the compatibility directory `BepInEx/config/CharacterVault/` on the **server**:
 
 ```
-BepInEx/config/ServerCharacters/
+BepInEx/config/CharacterVault/
 ├── bindings.json       ← Steam ID → character name mappings
 ├── overrides.json      ← Active one-time override grants
 └── snapshots/

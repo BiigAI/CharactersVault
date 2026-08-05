@@ -4,167 +4,178 @@ using System.Collections.Generic;
 using System.IO;
 using BepInEx;
 using HarmonyLib;
-using ServerCharacters.Models;
+using CharacterVault.Models;
 using UnityEngine;
 
-namespace ServerCharacters.Systems
+namespace CharacterVault.Systems
 {
     public class NetworkManager : MonoBehaviour
     {
         public static NetworkManager Instance { get; private set; } = null!;
 
-        private const string RpcHandshake        = "ServerCharacters_Handshake";
-        private const string RpcProfileData      = "ServerCharacters_ProfileData";
-        private const string RpcSaveProfile      = "ServerCharacters_SaveProfile";
-        private const string RpcSaveProfileChunk = "ServerCharacters_SaveProfileChunk";
-        private const string RpcProfileDataChunk = "ServerCharacters_ProfileDataChunk";
+        private const string RpcHandshake        = "CharacterVault_Handshake";
+        private const string RpcProfileData      = "CharacterVault_ProfileData";
+        private const string RpcSaveProfile      = "CharacterVault_SaveProfile";
+        private const string RpcSaveProfileChunk = "CharacterVault_SaveProfileChunk";
+        private const string RpcProfileDataChunk = "CharacterVault_ProfileDataChunk";
+        private const string RpcKickReason       = "CharacterVault_KickReason";
 
         private const int ChunkSize = 500 * 1024; // 500 KB chunks
 
-        /// <summary>
-        /// Peers that have successfully completed our handshake.
-        /// The timeout coroutine checks this set — if a peer is NOT in here after the
-        /// timeout window, they are kicked (no mod installed or wrong version).
-        /// </summary>
         private readonly HashSet<long> _handshakeCompleted = new HashSet<long>();
 
         public static void Initialize()
         {
-            var go = new GameObject("ServerCharacters_NetworkManager");
+            var go = new GameObject("CharacterVault_NetworkManager");
             Instance = go.AddComponent<NetworkManager>();
             DontDestroyOnLoad(go);
+            Plugin.Log.LogInfo("[CharacterVault :: Network] NetworkManager initialized.");
         }
 
         public void RegisterRPCs()
         {
             ZRoutedRpc.instance.Register<string>(RpcHandshake, RPC_Handshake);
-            ZRoutedRpc.instance.Register<int, int, byte[]>(RpcProfileDataChunk, RPC_ProfileDataChunk);
-            ZRoutedRpc.instance.Register<int, int, byte[]>(RpcSaveProfileChunk, RPC_SaveProfileChunk);
+            ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcProfileDataChunk, RPC_ProfileDataChunk);
+            ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcSaveProfileChunk, RPC_SaveProfileChunk);
+            ZRoutedRpc.instance.Register<string>(RpcKickReason, RPC_KickReason);
+            Plugin.Log.LogInfo("[CharacterVault :: Network] RPC handlers registered.");
+        }
+
+        private void RPC_KickReason(long sender, string reason)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer()) return;
+
+            ConnectionRejectionManager.SetReason(reason);
+            Plugin.Log.LogWarning($"[CharacterVault :: Network] Server rejection reason: {reason}");
+        }
+
+        public void RejectPeer(ZNetPeer peer, string reason)
+        {
+            if (ZNet.instance == null || !ZNet.instance.IsServer()) return;
+
+            ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, RpcKickReason, reason);
+            StartCoroutine(DisconnectRejectedPeer(peer));
+        }
+
+        private IEnumerator DisconnectRejectedPeer(ZNetPeer peer)
+        {
+            // Give the routed reason packet one update to reach the client before
+            // Valheim closes the peer and displays its generic kick panel.
+            yield return null;
+
+            if (ZNet.instance == null || ZNet.instance.GetPeer(peer.m_uid) != peer)
+                yield break;
+
+            peer.m_rpc.Invoke("Error", (int)ZNet.ConnectionStatus.ErrorKicked);
+            ZNet.instance.Disconnect(peer);
         }
 
         // ── Handshake ─────────────────────────────────────────────────────────────
-        //
-        // Flow:
-        //   1. Server → Client:  RpcHandshake("request")
-        //   2. Client → Server:  RpcHandshake(<modVersion>)
-        //   3. Server validates version, marks peer as handshake-complete, sends profile data.
 
         private void RPC_Handshake(long sender, string version)
         {
             if (ZNet.instance.IsServer())
             {
-                // Server received handshake response from client
-                if (version == "request")
-                {
-                    // This is our own broadcast reflecting back — ignore
-                    return;
-                }
+                if (version == "request") return;
 
                 if (version != Plugin.ModVersion)
                 {
-                    Plugin.Log.LogWarning($"[NetworkManager] Peer {sender} has wrong mod version: {version} (expected {Plugin.ModVersion}). Kicking.");
+                    Plugin.Log.LogWarning($"[CharacterVault :: Network] Peer {sender} wrong mod version: '{version}' (expected '{Plugin.ModVersion}'). KICKING.");
                     var wrongPeer = ZNet.instance.GetPeer(sender);
                     if (wrongPeer != null) ZNet.instance.Disconnect(wrongPeer);
                     return;
                 }
 
-                Plugin.Log.LogInfo($"[NetworkManager] Peer {sender} completed handshake (v{version}).");
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} COMPLETED HANDSHAKE (v{version}).");
                 _handshakeCompleted.Add(sender);
 
-                // Now send them their profile data
                 var peer = ZNet.instance.GetPeer(sender);
-                if (peer == null) return;
+                if (peer == null)
+                {
+                    Plugin.Log.LogWarning($"[CharacterVault :: Network] Peer {sender} null after handshake!");
+                    return;
+                }
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] Checking snapshot store for SteamID {playerId} ('{peer.m_playerName}')...");
+
                 var snapshot = SnapshotManager.GetSnapshot(playerId);
 
                 byte[] profileBytes;
                 if (snapshot != null && snapshot.HasData)
                 {
                     profileBytes = snapshot.GetProfileBytes();
-                    Plugin.Log.LogInfo($"[NetworkManager] Sending existing profile to peer {sender} ({profileBytes.Length} bytes).");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (SteamID {playerId}) -> SENDING EXISTING STORED PROFILE ({profileBytes.Length} bytes).");
                 }
                 else
                 {
-                    // First join — send a blank character (server is the source of truth)
-                    profileBytes = Helpers.ProfileHelper.CreateBlankProfile(peer.m_playerName);
-                    Plugin.Log.LogInfo($"[NetworkManager] First join for {playerId} — sending blank profile ({profileBytes.Length} bytes).");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (SteamID {playerId}) -> NO STORED SNAPSHOT (First Join). Requesting client-side clean initialization.");
+                    profileBytes = Array.Empty<byte>();
                 }
 
-                SendProfileDataToClient(sender, profileBytes);
+                SendProfileDataToClient(sender, profileBytes, snapshot != null && snapshot.IsPlayerData, snapshot == null);
             }
             else
             {
-                // Client received handshake request from server — reply with our version
                 if (version == "request")
                 {
-                    Plugin.Log.LogInfo($"[NetworkManager] Server requested handshake. Replying with version {Plugin.ModVersion}.");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Server requested handshake. Replying with version '{Plugin.ModVersion}'.");
                     ZRoutedRpc.instance.InvokeRoutedRPC(sender, RpcHandshake, Plugin.ModVersion);
                 }
             }
         }
 
-        /// <summary>
-        /// Called by the server when a new peer joins. Sends the handshake request and
-        /// starts the timeout watchdog that kicks the peer if they never reply.
-        /// </summary>
         public void SendHandshakeRequest(ZNetPeer peer)
         {
-            Plugin.Log.LogInfo($"[NetworkManager] Sending handshake request to peer {peer.m_uid}...");
+            Plugin.Log.LogInfo($"[CharacterVault :: Network] Initiating handshake with peer {peer.m_uid} (SteamID {peer.m_socket.GetHostName()})...");
             ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, RpcHandshake, "request");
             StartCoroutine(HandshakeTimeout(peer));
         }
 
-        /// <summary>
-        /// Watchdog: if the peer hasn't completed the handshake within the configured
-        /// timeout, they are kicked. This enforces the "client mod required" policy.
-        /// </summary>
         private IEnumerator HandshakeTimeout(ZNetPeer peer)
         {
             float timeout = ModConfig.ProfileSyncTimeoutSeconds.Value;
             yield return new WaitForSeconds(timeout);
 
-            // Still connected but never replied?
             if (ZNet.instance != null &&
                 ZNet.instance.GetPeer(peer.m_uid) != null &&
                 !_handshakeCompleted.Contains(peer.m_uid))
             {
                 Plugin.Log.LogWarning(
-                    $"[NetworkManager] Peer {peer.m_uid} timed out waiting for handshake ({timeout}s). " +
-                    $"Client mod not installed or incompatible. Kicking.");
+                    $"[CharacterVault :: Network] Peer {peer.m_uid} TIMED OUT after {timeout}s waiting for handshake. " +
+                    $"Client mod not installed or incompatible. KICKING PEER.");
                 ZNet.instance.Disconnect(peer);
             }
         }
 
-        /// <summary>
-        /// Called when a peer disconnects. Cleans up the handshake tracking set.
-        /// </summary>
         public void OnPeerDisconnected(long peerId)
         {
-            _handshakeCompleted.Remove(peerId);
+            if (_handshakeCompleted.Remove(peerId))
+            {
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] Cleaned up handshake tracking for disconnected peer {peerId}.");
+            }
         }
 
         // ── Profile data transfer ─────────────────────────────────────────────────
 
-        private void SendProfileDataToClient(long peerId, byte[] data)
+        private void SendProfileDataToClient(long peerId, byte[] data, bool isPlayerData, bool isFirstJoin)
         {
-            Plugin.Log.LogInfo($"[NetworkManager] Sending {data.Length} bytes of profile data to peer {peerId}");
-            SendChunks(peerId, RpcProfileDataChunk, data);
+            Plugin.Log.LogInfo($"[CharacterVault :: Network] Transmitting {data.Length} profile bytes to client peer {peerId}...");
+            SendChunks(peerId, RpcProfileDataChunk, data, isPlayerData, isFirstJoin);
         }
 
-        public void SendProfileDataToServer(byte[] data)
+        public void SendProfileDataToServer(byte[] data, bool isPlayerData = false)
         {
-            Plugin.Log.LogInfo($"[NetworkManager] Sending {data.Length} bytes of profile data to server");
-            // In Valheim, peer ID 0 represents the server from a client's perspective
-            SendChunks(0L, RpcSaveProfileChunk, data);
+            Plugin.Log.LogInfo($"[CharacterVault :: Network] Transmitting {data.Length} profile bytes to server...");
+            SendChunks(0L, RpcSaveProfileChunk, data, isPlayerData, false);
         }
 
-        private void SendChunks(long target, string rpcName, byte[] data)
+        private void SendChunks(long target, string rpcName, byte[] data, bool isPlayerData, bool isFirstJoin)
         {
             int totalChunks = Mathf.CeilToInt((float)data.Length / ChunkSize);
             if (totalChunks == 0)
             {
-                ZRoutedRpc.instance.InvokeRoutedRPC(target, rpcName, 0, 0, Array.Empty<byte>());
+                ZRoutedRpc.instance.InvokeRoutedRPC(target, rpcName, 0, 0, isPlayerData, isFirstJoin, new ZPackage());
                 return;
             }
 
@@ -173,35 +184,36 @@ namespace ServerCharacters.Systems
                 int length = Mathf.Min(ChunkSize, data.Length - (i * ChunkSize));
                 byte[] chunk = new byte[length];
                 Array.Copy(data, i * ChunkSize, chunk, 0, length);
-                ZRoutedRpc.instance.InvokeRoutedRPC(target, rpcName, totalChunks, i, chunk);
+                ZRoutedRpc.instance.InvokeRoutedRPC(target, rpcName, totalChunks, i, isPlayerData, isFirstJoin, new ZPackage(chunk));
             }
         }
 
-        private void RPC_ProfileDataChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
+        private void RPC_ProfileDataChunk(long sender, int totalChunks, int chunkIndex, bool isPlayerData, bool isFirstJoin, ZPackage chunk)
         {
             if (ZNet.instance.IsServer()) return;
 
-            byte[] fullData = ProcessIncomingChunk(sender, totalChunks, chunkIndex, chunk);
+            byte[]? fullData = ProcessIncomingChunk(sender, totalChunks, chunkIndex, chunk.GetArray());
             if (fullData != null)
             {
-                Plugin.Log.LogInfo($"[NetworkManager] Client received full profile data ({fullData.Length} bytes).");
-                Patches.ClientProfilePatches.ReceiveServerProfile(fullData);
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] CLIENT: Full profile data reassembled ({fullData.Length} bytes). Passing to ClientProfilePatches.");
+                Patches.ClientProfilePatches.ReceiveServerProfile(fullData, isPlayerData, isFirstJoin);
             }
         }
 
-        private void RPC_SaveProfileChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
+        private void RPC_SaveProfileChunk(long sender, int totalChunks, int chunkIndex, bool isPlayerData, bool isFirstJoin, ZPackage chunk)
         {
             if (!ZNet.instance.IsServer()) return;
 
-            byte[] fullData = ProcessIncomingChunk(sender, totalChunks, chunkIndex, chunk);
+            byte[]? fullData = ProcessIncomingChunk(sender, totalChunks, chunkIndex, chunk.GetArray());
             if (fullData != null)
             {
-                Plugin.Log.LogInfo($"[NetworkManager] Server received full profile data ({fullData.Length} bytes) from peer {sender}.");
                 var peer = ZNet.instance.GetPeer(sender);
                 if (peer == null) return;
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
-                var snapshot = SnapshotManager.CreateSnapshot(playerId, peer.m_playerName, fullData);
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] SERVER: Received full profile upload ({fullData.Length} bytes) from peer {sender} (SteamID {playerId}, Character '{peer.m_playerName}')");
+
+                var snapshot = SnapshotManager.CreateSnapshot(playerId, peer.m_playerName, fullData, isPlayerData);
                 SnapshotManager.SaveSnapshot(snapshot);
             }
         }
@@ -210,7 +222,7 @@ namespace ServerCharacters.Systems
 
         private Dictionary<long, Dictionary<int, byte[]>> _incomingChunks = new Dictionary<long, Dictionary<int, byte[]>>();
 
-        private byte[] ProcessIncomingChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
+        private byte[]? ProcessIncomingChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
         {
             if (totalChunks == 0) return Array.Empty<byte>();
 
@@ -221,7 +233,6 @@ namespace ServerCharacters.Systems
 
             if (_incomingChunks[sender].Count == totalChunks)
             {
-                // Reconstruct full array
                 List<byte> fullData = new List<byte>();
                 for (int i = 0; i < totalChunks; i++)
                 {
@@ -232,7 +243,7 @@ namespace ServerCharacters.Systems
                 return fullData.ToArray();
             }
 
-            return Array.Empty<byte>();
+            return null;
         }
     }
 }

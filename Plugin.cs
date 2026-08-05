@@ -5,18 +5,18 @@ using System.Linq;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using ServerCharacters.Helpers;
-using ServerCharacters.Systems;
+using CharacterVault.Helpers;
+using CharacterVault.Systems;
 using UnityEngine;
 
-namespace ServerCharacters
+namespace CharacterVault
 {
     [BepInPlugin(Plugin.ModGuid, Plugin.ModName, Plugin.ModVersion)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string ModGuid    = "com.servercharacters.valheim";
-        public const string ModName    = "ServerCharacters";
-        public const string ModVersion = "2.0.0";
+        public const string ModGuid    = "com.charactervault.valheim";
+        public const string ModName    = "CharactersVault";
+        public const string ModVersion = "2.3.0";
 
         /// <summary>Static reference for accessing the plugin instance (e.g. for StartCoroutine).</summary>
         public static Plugin Instance { get; private set; } = null!;

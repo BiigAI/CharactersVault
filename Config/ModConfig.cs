@@ -1,10 +1,10 @@
-using BepInEx.Configuration;
+﻿using BepInEx.Configuration;
 
-namespace ServerCharacters
+namespace CharacterVault
 {
     /// <summary>
     /// All configurable settings for the mod, exposed through BepInEx's .cfg system.
-    /// Server admins can edit BepInEx/config/ServerCharacters.cfg on the server.
+    /// Server admins can edit BepInEx/config/CharacterVault.cfg on the server.
     /// Clients can also edit their local copy to adjust sync timeout behaviour.
     /// </summary>
     public static class ModConfig
@@ -80,13 +80,13 @@ namespace ServerCharacters
             KickMessageWrongCharacter = cfg.Bind(
                 "Messages",
                 "KickMessageWrongCharacter",
-                "ServerCharacters: You must use your registered character for this server. Contact an admin if this is an error.",
+                "Wrong Character",
                 "Message sent to players kicked for using the wrong character.");
 
             KickMessageMismatch = cfg.Bind(
                 "Messages",
                 "KickMessageMismatch",
-                "ServerCharacters: Your character data does not match the server's records. Contact an admin if you believe this is a mistake.",
+                "CharacterVault: Your character data does not match the server's records. Contact an admin if you believe this is a mistake.",
                 "Message sent to players kicked for inventory/skill mismatch.");
 
             ProfileSyncTimeoutSeconds = cfg.Bind(

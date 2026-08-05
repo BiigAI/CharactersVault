@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
-namespace ServerCharacters.Systems
+namespace CharacterVault.Systems
 {
     /// <summary>
     /// Manages in-memory one-time admin overrides that allow a player to bypass the snapshot

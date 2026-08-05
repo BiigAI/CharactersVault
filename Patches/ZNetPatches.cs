@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections;
 using HarmonyLib;
-using ServerCharacters.Helpers;
-using ServerCharacters.Models;
-using ServerCharacters.Systems;
+using CharacterVault.Helpers;
+using CharacterVault.Models;
+using CharacterVault.Systems;
 using UnityEngine;
 
-namespace ServerCharacters.Patches
+namespace CharacterVault.Patches
 {
     // ═══════════════════════════════════════════════════════════════════════════
     // PATCH 1: ZNet.RPC_PeerInfo — fires on server when a client sends peer data
@@ -41,7 +41,7 @@ namespace ServerCharacters.Patches
                     return;
                 }
 
-                Plugin.Log.LogInfo($"[ServerCharacters] Player joining: playerId={playerId}, Character='{characterName}'");
+                Plugin.Log.LogInfo($"[CharacterVault] Player joining: playerId={playerId}, Character='{characterName}'");
 
                 // ── Step 1: Character binding check ──────────────────────────────
                 if (ModConfig.EnforceCharacterBinding.Value)
@@ -52,7 +52,7 @@ namespace ServerCharacters.Patches
                         if (!string.Equals(registeredName, characterName, StringComparison.OrdinalIgnoreCase))
                         {
                             Plugin.Log.LogWarning(
-                                $"[ServerCharacters] KICK {playerId}: tried '{characterName}', registered as '{registeredName}'");
+                                $"[CharacterVault] KICK {playerId}: tried '{characterName}', registered as '{registeredName}'");
                             KickPeer(peer, ModConfig.KickMessageWrongCharacter.Value);
                             return;
                         }
@@ -78,16 +78,12 @@ namespace ServerCharacters.Patches
         {
             try
             {
-                Plugin.Log.LogWarning($"[ServerCharacters] Kicking peer {peer.m_uid}: {reason}");
-                peer.m_rpc.Invoke("Error", (int)ZNet.ConnectionStatus.ErrorBanned);
+                Plugin.Log.LogWarning($"[CharacterVault] Kicking peer {peer.m_uid}: {reason}");
+                NetworkManager.Instance.RejectPeer(peer, reason);
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogError($"[ZNetPatch] Error sending kick RPC: {ex.Message}");
-            }
-            finally
-            {
-                ZNet.instance?.Disconnect(peer);
             }
         }
     }
@@ -113,6 +109,18 @@ namespace ServerCharacters.Patches
             {
                 Plugin.Log.LogError($"[ZNetPatch] Exception in Disconnect patch: {ex}");
             }
+        }
+    }
+
+    [HarmonyPatch(typeof(FejdStartup), "ShowConnectError")]
+    public static class FejdStartup_ShowConnectError_Patch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(FejdStartup __instance)
+        {
+            string? reason = ConnectionRejectionManager.ConsumeReason();
+            if (!string.IsNullOrWhiteSpace(reason))
+                Traverse.Create(__instance).Field("m_connectionFailedError").Property("text").SetValue(reason);
         }
     }
 }

@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace ServerCharacters.Models
+namespace CharacterVault.Models
 {
     /// <summary>
     /// A point-in-time snapshot of a player's character state captured from server-side ZDO data.
@@ -23,6 +23,9 @@ namespace ServerCharacters.Models
         /// A null or empty string means no profile data was available (e.g. fresh character).
         /// </summary>
         public string ProfileDataBase64 { get; set; } = string.Empty;
+
+        /// <summary>True when the bytes are Player.Save(ZPackage) data rather than a full .fch file.</summary>
+        public bool IsPlayerData { get; set; }
 
         /// <summary>Convenience: decode profile bytes.</summary>
         public byte[] GetProfileBytes() =>

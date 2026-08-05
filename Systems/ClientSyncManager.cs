@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections;
-using ServerCharacters.Models;
+using CharacterVault.Models;
 using UnityEngine;
 
-namespace ServerCharacters.Systems
+namespace CharacterVault.Systems
 {
     public class ClientSyncManager : MonoBehaviour
     {
@@ -13,7 +13,7 @@ namespace ServerCharacters.Systems
 
         public static void Initialize()
         {
-            var go = new GameObject("ServerCharacters_ClientSyncManager");
+            var go = new GameObject("CharacterVault_ClientSyncManager");
             Instance = go.AddComponent<ClientSyncManager>();
             DontDestroyOnLoad(go);
         }
@@ -27,6 +27,28 @@ namespace ServerCharacters.Systems
         {
             if (_syncCoroutine != null)
                 StopCoroutine(_syncCoroutine);
+
+        }
+
+        public void QueueSnapshotUpdate(string reason)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer() ||
+                Patches.ClientProfilePatches.IsWaitingForProfile() ||
+                Patches.ClientProfilePatches.IsInitializingFirstJoin())
+                return;
+
+            try
+            {
+                byte[] playerData = Patches.ClientProfilePatches.CaptureLivePlayerData();
+                if (playerData.Length == 0) return;
+
+                Plugin.Log.LogInfo($"[ClientSyncManager] Uploading live player-data checkpoint: {reason}.");
+                NetworkManager.Instance.SendProfileDataToServer(playerData, isPlayerData: true);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ClientSyncManager] Failed to upload live player-data checkpoint: {ex}");
+            }
         }
 
         private IEnumerator PeriodicSyncCoroutine()

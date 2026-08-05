@@ -1,27 +1,24 @@
 using System;
+using System.IO;
 using System.Reflection;
+using System.Runtime.Serialization;
+using HarmonyLib;
 
-namespace ServerCharacters.Helpers
+namespace CharacterVault.Helpers
 {
     /// <summary>
-    /// Utility for generating valid Valheim PlayerProfile byte arrays via reflection.
-    ///
-    /// We cannot call PlayerProfile methods directly at compile time because the
-    /// constructor signature depends on FileHelpers types from assembly_utils.dll which
-    /// is not in libs. Instead we use reflection to call the same constructor and
-    /// serialization method at runtime when all assemblies are loaded by the game.
-    ///
-    /// The blank profile format is produced by constructing a default PlayerProfile
-    /// and serializing it with SavePlayerData(), mirroring exactly what Valheim does
-    /// when writing a .fch file. This guarantees the bytes are always valid for the
-    /// currently-running version of the game.
+    /// Utility for generating valid, native Valheim PlayerProfile byte arrays via reflection.
+    /// Uses FormatterServices.GetUninitializedObject to construct a clean PlayerProfile instance
+    /// on any platform without constructor dependency mismatch, populates fields, and calls
+    /// SavePlayerToDisk() to produce guaranteed valid .fch profile bytes.
     /// </summary>
     public static class ProfileHelper
     {
-        // Cached reflection info — resolved once on first call
         private static bool _initialized;
-        private static ConstructorInfo? _profileCtor;
-        private static MethodInfo? _savePlayerData;
+        private static MethodInfo? _savePlayerToDiskMethod;
+        private static FieldInfo? _playerNameField;
+        private static FieldInfo? _filenameField;
+        private static FieldInfo? _fileSourceField;
 
         private static void EnsureInitialized()
         {
@@ -32,65 +29,113 @@ namespace ServerCharacters.Helpers
             {
                 var profileType = typeof(PlayerProfile);
 
-                // PlayerProfile(string name) — the simplest constructor
-                _profileCtor = profileType.GetConstructor(
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    new[] { typeof(string) },
-                    null);
+                _savePlayerToDiskMethod = profileType.GetMethod(
+                    "SavePlayerToDisk",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
-                // void SavePlayerData(ZPackage pkg) — serializes the profile to a ZPackage
-                _savePlayerData = profileType.GetMethod(
-                    "SavePlayerData",
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                    null,
-                    new[] { typeof(ZPackage) },
-                    null);
+                _playerNameField = profileType.GetField("m_playerName", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                _filenameField   = profileType.GetField("m_filename", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                _fileSourceField = profileType.GetField("m_fileSource", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-                if (_profileCtor == null)
-                    Plugin.Log.LogWarning("[ProfileHelper] Could not find PlayerProfile(string) constructor via reflection.");
-                if (_savePlayerData == null)
-                    Plugin.Log.LogWarning("[ProfileHelper] Could not find PlayerProfile.SavePlayerData(ZPackage) via reflection.");
+                if (_savePlayerToDiskMethod == null)
+                    Plugin.Log.LogWarning("[CharacterVault :: ProfileHelper] Could not find PlayerProfile.SavePlayerToDisk method via reflection.");
+                if (_playerNameField == null || _filenameField == null)
+                    Plugin.Log.LogWarning("[CharacterVault :: ProfileHelper] Could not find name/filename fields on PlayerProfile.");
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[ProfileHelper] Reflection init failed: {ex.Message}");
+                Plugin.Log.LogError($"[CharacterVault :: ProfileHelper] Reflection init failed: {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Creates the raw bytes for a blank, freshly-created character profile
-        /// with the given name. Returns an empty array if profile generation fails,
-        /// in which case the client falls back to their existing local file.
-        /// </summary>
         public static byte[] CreateBlankProfile(string characterName)
         {
+            Plugin.Log.LogInfo($"[CharacterVault :: ProfileHelper] Generating native blank .fch profile for character '{characterName}'...");
             EnsureInitialized();
 
-            if (_profileCtor == null || _savePlayerData == null)
+            if (_savePlayerToDiskMethod == null)
             {
-                Plugin.Log.LogWarning("[ProfileHelper] Reflection not available — sending empty profile (client will use local file).");
+                Plugin.Log.LogError("[CharacterVault :: ProfileHelper] Reflection targets missing — cannot generate blank profile.");
                 return Array.Empty<byte>();
             }
 
             try
             {
-                // Construct a fresh PlayerProfile with the given name
-                object profile = _profileCtor.Invoke(new object[] { characterName });
+                var profileType = typeof(PlayerProfile);
+                PlayerProfile? profile = null;
 
-                // Serialize it into a ZPackage (same as what Valheim does for .fch)
-                var pkg = new ZPackage();
-                _savePlayerData.Invoke(profile, new object[] { pkg });
+                // Try to use the 2-parameter constructor
+                if (_fileSourceField != null)
+                {
+                    try
+                    {
+                        object localEnum = Enum.Parse(_fileSourceField.FieldType, "Local");
+                        profile = (PlayerProfile)Activator.CreateInstance(profileType, characterName, localEnum);
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.LogWarning($"[CharacterVault :: ProfileHelper] Activator.CreateInstance failed: {ex.Message}");
+                    }
+                }
 
-                byte[] bytes = pkg.GetArray();
-                Plugin.Log.LogInfo($"[ProfileHelper] Generated blank profile for '{characterName}' ({bytes.Length} bytes).");
-                return bytes;
+                if (profile == null)
+                {
+                    Plugin.Log.LogError($"[CharacterVault :: ProfileHelper] Failed to instantiate PlayerProfile for '{characterName}'.");
+                    return Array.Empty<byte>();
+                }
+
+                // The constructor argument is the save filename; Valheim initializes
+                // the player name to "Stranger" until SetName is called explicitly.
+                profile.SetName(characterName);
+
+                // 4. Save it to disk using Valheim's SavePlayerToDisk()
+                _savePlayerToDiskMethod.Invoke(profile, null);
+
+                // 5. Read the native .fch file through Valheim's file abstraction.
+                string path = profile.GetPath();
+
+                if (File.Exists(path))
+                {
+                    byte[] bytes = File.ReadAllBytes(path);
+
+                    // Clean up temp file on server disk
+                    try { File.Delete(path); } catch { }
+
+                    Plugin.Log.LogInfo($"[CharacterVault :: ProfileHelper] SUCCESS: Generated {bytes.Length}-byte native blank profile for '{characterName}'.");
+                    return bytes;
+                }
+                else
+                {
+                    Plugin.Log.LogError($"[CharacterVault :: ProfileHelper] SavePlayerToDisk did not produce expected file at '{path}'.");
+                    return Array.Empty<byte>();
+                }
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[ProfileHelper] Failed to generate blank profile: {ex.Message}");
+                if (ex is TargetInvocationException tie && tie.InnerException != null)
+                {
+                    Plugin.Log.LogError($"[CharacterVault :: ProfileHelper] Failed to generate blank profile for '{characterName}': {tie.InnerException.GetType().Name} - {tie.InnerException.Message}\nStackTrace:\n{tie.InnerException.StackTrace}");
+                }
+                else
+                {
+                    Plugin.Log.LogError($"[CharacterVault :: ProfileHelper] Failed to generate blank profile for '{characterName}': {ex}");
+                }
                 return Array.Empty<byte>();
             }
+        }
+
+        private static Type? GetUtilsType()
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try
+                {
+                    var type = asm.GetType("Utils");
+                    if (type != null) return type;
+                }
+                catch { }
+            }
+            return null;
         }
     }
 }

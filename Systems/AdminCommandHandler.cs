@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Text;
-using ServerCharacters.Helpers;
+using CharacterVault.Helpers;
 
-namespace ServerCharacters.Systems
+namespace CharacterVault.Systems
 {
     /// <summary>
     /// Processes admin commands received via server-side chat interception.
@@ -225,7 +225,7 @@ namespace ServerCharacters.Systems
                         {
                             adminPeer.m_refPos,          // position
                             (int)Talker.Type.Normal, // chat type
-                            "ServerCharacters",       // sender name
+                            "CharacterVault",       // sender name
                             message                   // message text
                         }
                     );
@@ -239,7 +239,7 @@ namespace ServerCharacters.Systems
         }
 
         private static string PrintHelp() =>
-            "ServerCharacters Admin Commands:\n" +
+            "CharacterVault Admin Commands:\n" +
             "  /sc allow [playerId]  — One-time override for mismatched player\n" +
             "  /sc deny [playerId]   — Revoke pending override\n" +
             "  /sc remove [playerId] — Remove character binding (allows re-register)\n" +

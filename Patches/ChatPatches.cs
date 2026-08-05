@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using HarmonyLib;
-using ServerCharacters.Systems;
+using CharacterVault.Systems;
 using UnityEngine;
 
-namespace ServerCharacters.Patches
+namespace CharacterVault.Patches
 {
     // ═══════════════════════════════════════════════════════════════════════════
     // PATCH: Chat.RPC_ChatMessage — fires on server when any player sends a chat message

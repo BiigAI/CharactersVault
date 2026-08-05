@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace ServerCharacters.Models
+namespace CharacterVault.Models
 {
     /// <summary>
     /// Represents the permanent binding between a Steam ID and a registered character name.

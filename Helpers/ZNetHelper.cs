@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace ServerCharacters.Helpers
+namespace CharacterVault.Helpers
 {
     /// <summary>
     /// Reflection-based wrappers for ZNet's private/internal members.

@@ -2,14 +2,15 @@
 
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyName>ServerCharacters</AssemblyName>
-    <RootNamespace>ServerCharacters</RootNamespace>
+    <AssemblyName>CharactersVault</AssemblyName>
+    <RootNamespace>CharacterVault</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <!-- Suppress auto-generated AssemblyInfo so Plugin.cs controls version -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Configurations>Debug;Release</Configurations>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <!--
@@ -27,6 +28,10 @@
     </PackageReference>
     <Reference Include="assembly_valheim">
       <HintPath>libs\assembly_valheim.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="assembly_utils">
+      <HintPath>libs\assembly_utils.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="BepInEx">
@@ -59,14 +64,18 @@
   -->
   <Target Name="DeployToServer" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
     <PropertyGroup>
-      <ValheimPluginsPath>C:\ValheimServer\BepInEx\plugins\ServerCharacters\</ValheimPluginsPath>
+      <ValheimPluginsPath>C:\ValheimServer\BepInEx\plugins\CharactersVault\</ValheimPluginsPath>
     </PropertyGroup>
+    <ItemGroup>
+      <DeployFiles Include="$(TargetDir)*.dll;$(TargetDir)*.pdb" />
+    </ItemGroup>
     <MakeDir Directories="$(ValheimPluginsPath)" />
+    <Delete Files="C:\ValheimServer\BepInEx\plugins\CharacterVault\CharacterVault.dll" />
     <Copy
-      SourceFiles="$(TargetDir)$(TargetFileName)"
+      SourceFiles="@(DeployFiles)"
       DestinationFolder="$(ValheimPluginsPath)"
       SkipUnchangedFiles="true" />
-    <Message Text="[ServerCharacters] Deployed to $(ValheimPluginsPath)" Importance="high" />
+    <Message Text="[CharactersVault] Deployed to $(ValheimPluginsPath)" Importance="high" />
   </Target>
 
 </Project>

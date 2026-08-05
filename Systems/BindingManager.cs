@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using ServerCharacters.Models;
+using CharacterVault.Models;
 
-namespace ServerCharacters.Systems
+namespace CharacterVault.Systems
 {
     /// <summary>
     /// Manages the permanent Steam ID → character name bindings.

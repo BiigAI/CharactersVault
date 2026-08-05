@@ -1,7 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
-namespace ServerCharacters.Models
+namespace CharacterVault.Models
 {
     /// <summary>
     /// The result of comparing a player's current ZDO state against their stored snapshot.
