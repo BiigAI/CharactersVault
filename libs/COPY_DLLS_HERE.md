@@ -11,6 +11,7 @@ Copy the following DLLs into this folder before building.
 | File | Purpose |
 |------|---------|
 | `assembly_valheim.dll` | Core Valheim game code |
+| `assembly_utils.dll` | Valheim utility and file helper types |
 | `UnityEngine.dll` | Unity engine base |
 | `UnityEngine.CoreModule.dll` | Unity core types |
 

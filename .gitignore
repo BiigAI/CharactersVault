@@ -21,5 +21,6 @@ Test_logs/
 .DS_Store
 Thumbs.db
 
-# Thunderstore packaging output (untracked — build locally with thunderstore/package.ps1)
-thunderstore/
+# Thunderstore packaging output
+thunderstore/*.zip
+thunderstore/staging/
