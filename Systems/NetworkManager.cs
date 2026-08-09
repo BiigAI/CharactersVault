@@ -21,8 +21,26 @@ namespace CharacterVault.Systems
         private const string RpcKickReason       = "CharacterVault_KickReason";
 
         private const int ChunkSize = 500 * 1024; // 500 KB chunks
+        private const int MaxProfileBytes = 64 * 1024 * 1024;
+        private const float IncomingTransferTimeoutSeconds = 120f;
 
         private readonly HashSet<long> _handshakeCompleted = new HashSet<long>();
+        private readonly Dictionary<long, IncomingTransfer> _incomingChunks = new Dictionary<long, IncomingTransfer>();
+        private float _nextIncomingTransferCleanup;
+
+        private sealed class IncomingTransfer
+        {
+            public IncomingTransfer(int totalChunks)
+            {
+                TotalChunks = totalChunks;
+                LastUpdated = Time.unscaledTime;
+            }
+
+            public int TotalChunks { get; }
+            public Dictionary<int, byte[]> Chunks { get; } = new Dictionary<int, byte[]>();
+            public int TotalBytes { get; set; }
+            public float LastUpdated { get; set; }
+        }
 
         public static void Initialize()
         {
@@ -97,7 +115,7 @@ namespace CharacterVault.Systems
                 }
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
-                Plugin.Log.LogInfo($"[CharacterVault :: Network] Checking snapshot store for SteamID {playerId} ('{peer.m_playerName}')...");
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] Checking snapshot store for platform ID {playerId} ('{peer.m_playerName}')...");
 
                 var snapshot = SnapshotManager.GetSnapshot(playerId);
 
@@ -105,11 +123,11 @@ namespace CharacterVault.Systems
                 if (snapshot != null && snapshot.HasData)
                 {
                     profileBytes = snapshot.GetProfileBytes();
-                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (SteamID {playerId}) -> SENDING EXISTING STORED PROFILE ({profileBytes.Length} bytes).");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> sending existing stored profile ({profileBytes.Length} bytes).");
                 }
                 else
                 {
-                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (SteamID {playerId}) -> NO STORED SNAPSHOT (First Join). Requesting client-side clean initialization.");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> no stored snapshot (first join). Requesting client-side clean initialization.");
                     profileBytes = Array.Empty<byte>();
                 }
 
@@ -127,7 +145,7 @@ namespace CharacterVault.Systems
 
         public void SendHandshakeRequest(ZNetPeer peer)
         {
-            Plugin.Log.LogInfo($"[CharacterVault :: Network] Initiating handshake with peer {peer.m_uid} (SteamID {peer.m_socket.GetHostName()})...");
+            Plugin.Log.LogInfo($"[CharacterVault :: Network] Initiating handshake with peer {peer.m_uid} (platform ID {peer.m_socket.GetHostName()})...");
             ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, RpcHandshake, "request");
             StartCoroutine(HandshakeTimeout(peer));
         }
@@ -150,6 +168,8 @@ namespace CharacterVault.Systems
 
         public void OnPeerDisconnected(long peerId)
         {
+            _incomingChunks.Remove(peerId);
+
             if (_handshakeCompleted.Remove(peerId))
             {
                 Plugin.Log.LogInfo($"[CharacterVault :: Network] Cleaned up handshake tracking for disconnected peer {peerId}.");
@@ -211,7 +231,7 @@ namespace CharacterVault.Systems
                 if (peer == null) return;
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
-                Plugin.Log.LogInfo($"[CharacterVault :: Network] SERVER: Received full profile upload ({fullData.Length} bytes) from peer {sender} (SteamID {playerId}, Character '{peer.m_playerName}')");
+                Plugin.Log.LogInfo($"[CharacterVault :: Network] Server received full profile upload ({fullData.Length} bytes) from peer {sender} (platform ID {playerId}, Character '{peer.m_playerName}')");
 
                 var snapshot = SnapshotManager.CreateSnapshot(playerId, peer.m_playerName, fullData, isPlayerData);
                 SnapshotManager.SaveSnapshot(snapshot);
@@ -220,30 +240,79 @@ namespace CharacterVault.Systems
 
         // ── Chunk reassembly ──────────────────────────────────────────────────────
 
-        private Dictionary<long, Dictionary<int, byte[]>> _incomingChunks = new Dictionary<long, Dictionary<int, byte[]>>();
-
         private byte[]? ProcessIncomingChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
         {
             if (totalChunks == 0) return Array.Empty<byte>();
 
-            if (!_incomingChunks.ContainsKey(sender))
-                _incomingChunks[sender] = new Dictionary<int, byte[]>();
-
-            _incomingChunks[sender][chunkIndex] = chunk;
-
-            if (_incomingChunks[sender].Count == totalChunks)
+            int maximumChunkCount = Mathf.CeilToInt((float)MaxProfileBytes / ChunkSize);
+            if (totalChunks < 1 || totalChunks > maximumChunkCount ||
+                chunkIndex < 0 || chunkIndex >= totalChunks || chunk.Length > ChunkSize)
             {
-                List<byte> fullData = new List<byte>();
+                Plugin.Log.LogWarning($"[CharacterVault :: Network] Discarded malformed chunk transfer from peer {sender}.");
+                _incomingChunks.Remove(sender);
+                return null;
+            }
+
+            if (!_incomingChunks.TryGetValue(sender, out IncomingTransfer? transfer) ||
+                transfer.TotalChunks != totalChunks)
+            {
+                transfer = new IncomingTransfer(totalChunks);
+                _incomingChunks[sender] = transfer;
+            }
+
+            transfer.LastUpdated = Time.unscaledTime;
+            if (transfer.Chunks.TryGetValue(chunkIndex, out byte[]? previousChunk))
+                transfer.TotalBytes -= previousChunk.Length;
+
+            transfer.TotalBytes += chunk.Length;
+            if (transfer.TotalBytes > MaxProfileBytes)
+            {
+                Plugin.Log.LogWarning($"[CharacterVault :: Network] Discarded oversized profile transfer from peer {sender}.");
+                _incomingChunks.Remove(sender);
+                return null;
+            }
+
+            transfer.Chunks[chunkIndex] = chunk;
+
+            if (transfer.Chunks.Count == totalChunks)
+            {
+                using var stream = new MemoryStream(transfer.TotalBytes);
                 for (int i = 0; i < totalChunks; i++)
                 {
-                    fullData.AddRange(_incomingChunks[sender][i]);
+                    if (!transfer.Chunks.TryGetValue(i, out byte[]? chunkData))
+                    {
+                        _incomingChunks.Remove(sender);
+                        return null;
+                    }
+
+                    stream.Write(chunkData, 0, chunkData.Length);
                 }
 
                 _incomingChunks.Remove(sender);
-                return fullData.ToArray();
+                return stream.ToArray();
             }
 
             return null;
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < _nextIncomingTransferCleanup)
+                return;
+
+            _nextIncomingTransferCleanup = Time.unscaledTime + 10f;
+            var stalePeers = new List<long>();
+            foreach (var entry in _incomingChunks)
+            {
+                if (Time.unscaledTime - entry.Value.LastUpdated > IncomingTransferTimeoutSeconds)
+                    stalePeers.Add(entry.Key);
+            }
+
+            foreach (long peerId in stalePeers)
+            {
+                _incomingChunks.Remove(peerId);
+                Plugin.Log.LogWarning($"[CharacterVault :: Network] Discarded incomplete profile transfer from peer {peerId} after timeout.");
+            }
         }
     }
 }

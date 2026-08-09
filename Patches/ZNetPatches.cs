@@ -12,8 +12,7 @@ namespace CharacterVault.Patches
     // PATCH 1: ZNet.RPC_PeerInfo — fires on server when a client sends peer data
     //
     // This is the earliest point we can read the player's character name and
-    // Steam ID. We perform the binding check here, and if the player passes,
-    // we schedule a coroutine to check their snapshot after the ZDO syncs.
+    // platform ID. We perform the binding check here, then begin the client handshake.
     //
     // NOTE: RPC_PeerInfo is a private method. If you get a Harmony patch warning
     //       at startup, verify the exact method name in dnSpy for your game version.
@@ -34,14 +33,15 @@ namespace CharacterVault.Patches
                 string playerId = ZNetHelper.GetPlayerId(peer);
                 string characterName = peer.m_playerName;
 
-                if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(characterName))
+                if (!ZNetHelper.IsValidPlayerId(playerId) || string.IsNullOrWhiteSpace(characterName))
                 {
                     if (ModConfig.VerboseLogging.Value)
-                        Plugin.Log.LogInfo($"[ZNetPatch] Skipping peer with invalid playerId or empty name.");
+                        Plugin.Log.LogInfo($"[ZNetPatch] Rejecting peer with invalid platform ID or empty name.");
+                    KickPeer(peer, "Invalid player identity.");
                     return;
                 }
 
-                Plugin.Log.LogInfo($"[CharacterVault] Player joining: playerId={playerId}, Character='{characterName}'");
+                Plugin.Log.LogInfo($"[CharacterVault] Player joining: platformId={playerId}, Character='{characterName}'");
 
                 // ── Step 1: Character binding check ──────────────────────────────
                 if (ModConfig.EnforceCharacterBinding.Value)

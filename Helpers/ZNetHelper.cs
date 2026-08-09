@@ -65,6 +65,25 @@ namespace CharacterVault.Helpers
         }
 
         /// <summary>
+        /// Verifies that an ID is safe to use as a binding key and snapshot filename.
+        /// Valheim reports platform IDs such as Steam_... and Xbox_... through GetHostName().
+        /// </summary>
+        public static bool IsValidPlayerId(string? playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || playerId.Length > 128)
+                return false;
+
+            foreach (char character in playerId)
+            {
+                if (!char.IsLetterOrDigit(character) && character != '_' && character != '-')
+                    return false;
+            }
+
+            return playerId.StartsWith("Steam_", StringComparison.Ordinal) ||
+                   playerId.StartsWith("Xbox_", StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Returns true if the given player ID is in the server's admin list (adminlist.txt).
         /// </summary>
         public static bool IsAdmin(string playerId)

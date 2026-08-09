@@ -123,19 +123,5 @@ namespace CharacterVault.Helpers
                 return Array.Empty<byte>();
             }
         }
-
-        private static Type? GetUtilsType()
-        {
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    var type = asm.GetType("Utils");
-                    if (type != null) return type;
-                }
-                catch { }
-            }
-            return null;
-        }
     }
 }

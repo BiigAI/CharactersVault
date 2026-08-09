@@ -18,7 +18,6 @@ namespace CharacterVault.Systems
 
         // File paths
         public static string BindingsFilePath => Path.Combine(_rootDir, "bindings.json");
-        public static string OverridesFilePath => Path.Combine(_rootDir, "overrides.json");
         private static string SnapshotPath(string playerId) =>
             Path.Combine(_snapshotsDir, $"{playerId}.json");
 
@@ -71,7 +70,7 @@ namespace CharacterVault.Systems
             try
             {
                 string json = JsonConvert.SerializeObject(bindings, JsonSettings);
-                File.WriteAllText(BindingsFilePath, json);
+                WriteAllTextAtomically(BindingsFilePath, json);
                 Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved {bindings.Count} binding(s) to '{BindingsFilePath}'");
             }
             catch (Exception ex)
@@ -94,12 +93,12 @@ namespace CharacterVault.Systems
                 }
                 string json = File.ReadAllText(path);
                 var snapshot = JsonConvert.DeserializeObject<PlayerSnapshot>(json, JsonSettings);
-                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Loaded snapshot file for SteamID {playerId} from '{path}'");
+                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Loaded snapshot file for platform ID {playerId} from '{path}'");
                 return snapshot;
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to load snapshot for SteamID {playerId}: {ex.Message}");
+                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to load snapshot for platform ID {playerId}: {ex.Message}");
                 return null;
             }
         }
@@ -110,39 +109,12 @@ namespace CharacterVault.Systems
             {
                 string path = SnapshotPath(snapshot.PlayerId);
                 string json = JsonConvert.SerializeObject(snapshot, JsonSettings);
-                File.WriteAllText(path, json);
-                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] SUCCESSFULLY SAVED SNAPSHOT for SteamID {snapshot.PlayerId} ('{snapshot.CharacterName}') -> '{path}'");
+                WriteAllTextAtomically(path, json);
+                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}') -> '{path}'");
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to save snapshot for SteamID {snapshot.PlayerId}: {ex.Message}");
-            }
-        }
-
-        // ── Admin Overrides ───────────────────────────────────────────────────────
-
-        public static HashSet<string> LoadOverrides()
-        {
-            try
-            {
-                if (!File.Exists(OverridesFilePath))
-                    return new HashSet<string>();
-
-                string json = File.ReadAllText(OverridesFilePath);
-                var dict = JsonConvert.DeserializeObject<Dictionary<string, bool>>(json, JsonSettings)
-                           ?? new Dictionary<string, bool>();
-
-                var result = new HashSet<string>();
-                foreach (var kvp in dict)
-                {
-                    if (kvp.Value) result.Add(kvp.Key);
-                }
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to load overrides: {ex.Message}");
-                return new HashSet<string>();
+                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to save snapshot for platform ID {snapshot.PlayerId}: {ex.Message}");
             }
         }
 
@@ -158,7 +130,7 @@ namespace CharacterVault.Systems
                 try
                 {
                     File.Delete(snapshotPath);
-                    Plugin.Log.LogInfo($"[CharacterVault :: DataStore] WIPE: Deleted snapshot file for SteamID {playerId}.");
+                    Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Wipe: deleted snapshot file for platform ID {playerId}.");
                     wiped = true;
                 }
                 catch (Exception ex)
@@ -172,28 +144,28 @@ namespace CharacterVault.Systems
             {
                 bindings.Remove(playerId);
                 SaveBindings(bindings);
-                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] WIPE: Removed character binding for SteamID {playerId}.");
+                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Wipe: removed character binding for platform ID {playerId}.");
                 wiped = true;
             }
 
             return wiped;
         }
 
-        public static void SaveOverrides(HashSet<string> overrides)
+        private static void WriteAllTextAtomically(string path, string content)
         {
+            string temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
             try
             {
-                var dict = new Dictionary<string, bool>();
-                foreach (string id in overrides)
-                    dict[id] = true;
-
-                string json = JsonConvert.SerializeObject(dict, JsonSettings);
-                File.WriteAllText(OverridesFilePath, json);
-                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved {overrides.Count} override(s) to '{OverridesFilePath}'");
+                File.WriteAllText(temporaryPath, content);
+                if (File.Exists(path))
+                    File.Replace(temporaryPath, path, null);
+                else
+                    File.Move(temporaryPath, path);
             }
-            catch (Exception ex)
+            finally
             {
-                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to save overrides: {ex.Message}");
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
             }
         }
     }

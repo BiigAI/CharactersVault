@@ -11,7 +11,7 @@ namespace CharacterVault.Systems
     {
         public static PlayerSnapshot CreateSnapshot(string playerId, string characterName, byte[] profileBytes, bool isPlayerData)
         {
-            Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Creating snapshot for SteamID {playerId} ('{characterName}'), raw bytes length: {profileBytes?.Length ?? 0}");
+            Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Creating snapshot for platform ID {playerId} ('{characterName}'), raw bytes length: {profileBytes?.Length ?? 0}");
             return new PlayerSnapshot
             {
                 PlayerId = playerId,
@@ -29,18 +29,18 @@ namespace CharacterVault.Systems
             var snapshot = DataStore.LoadSnapshot(playerId);
             if (snapshot != null && snapshot.HasData)
             {
-                Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] FOUND existing snapshot for SteamID {playerId} ('{snapshot.CharacterName}'), created: {snapshot.SnapshotTime}");
+                Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Found existing snapshot for platform ID {playerId} ('{snapshot.CharacterName}'), created: {snapshot.SnapshotTime}");
             }
             else
             {
-                Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] NO existing snapshot found for SteamID {playerId}.");
+                Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] No existing snapshot found for platform ID {playerId}.");
             }
             return snapshot;
         }
 
         public static void SaveSnapshot(PlayerSnapshot snapshot)
         {
-            Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Saving snapshot for SteamID {snapshot.PlayerId} ('{snapshot.CharacterName}')...");
+            Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Saving snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}')...");
             DataStore.SaveSnapshot(snapshot);
         }
     }

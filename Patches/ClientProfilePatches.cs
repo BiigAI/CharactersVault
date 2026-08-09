@@ -207,19 +207,6 @@ namespace CharacterVault.Patches
             return (FileHelpers.FileSource)Traverse.Create(profile).Field("m_fileSource").GetValue();
         }
 
-        public static Type? GetUtilsType()
-        {
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    var type = asm.GetType("Utils");
-                    if (type != null) return type;
-                }
-                catch { }
-            }
-            return null;
-        }
     }
 
     // ── Patch 1: Game.Start — set up the wait state early ─────────────────────

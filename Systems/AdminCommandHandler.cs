@@ -9,12 +9,10 @@ namespace CharacterVault.Systems
     ///
     /// Commands are prefixed with "/sc" and only execute if the sender is in the server's admin list.
     ///
-    /// File-based administration (editing overrides.json / bindings.json directly) is always
+    /// File-based administration (editing bindings.json directly) is always
     /// available as a fallback and is the primary admin method for headless servers.
     ///
     /// Available commands:
-    ///   /sc allow [playerId]   — Grant one-time override for mismatch (in-memory + disk)
-    ///   /sc deny [playerId]    — Revoke a pending in-memory override
     ///   /sc remove [playerId]  — Remove a character binding (player can re-register)
     ///   /sc wipe [playerId]    — Fully delete all server data for a player (blank slate on next join)
     ///   /sc list              — List all registered bindings
@@ -34,7 +32,7 @@ namespace CharacterVault.Systems
         /// <summary>
         /// Parse and execute an admin command. Logs the result.
         /// </summary>
-        /// <param name="senderSteamId">Steam ID of the player who sent the message.</param>
+        /// <param name="senderUid">Network UID of the player who sent the message.</param>
         /// <param name="text">Full chat message text (including the /sc prefix).</param>
         /// <returns>True if the command was recognized and handled, false otherwise.</returns>
         public static bool Handle(long senderUid, string text)
@@ -65,12 +63,6 @@ namespace CharacterVault.Systems
 
             switch (command)
             {
-                case "allow":
-                    return CmdAllow(peer, tokens);
-
-                case "deny":
-                    return CmdDeny(peer, tokens);
-
                 case "remove":
                     return CmdRemove(peer, tokens);
 
@@ -95,35 +87,6 @@ namespace CharacterVault.Systems
 
         // ── Commands ──────────────────────────────────────────────────────────────
 
-        private static bool CmdAllow(ZNetPeer adminPeer, string[] tokens)
-        {
-            if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
-
-            // Grant both in-memory and on-disk override
-            OverrideManager.GrantMemoryOverride(targetId);
-            var diskOverrides = DataStore.LoadOverrides();
-            diskOverrides.Add(targetId);
-            DataStore.SaveOverrides(diskOverrides);
-
-            LogToAdmin(adminPeer, $"Granted one-time override for {targetId}. They may join once with mismatched data.");
-            return true;
-        }
-
-        private static bool CmdDeny(ZNetPeer adminPeer, string[] tokens)
-        {
-            if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
-
-            bool removed = OverrideManager.RevokeOverride(targetId);
-            var diskOverrides = DataStore.LoadOverrides();
-            bool removedDisk = diskOverrides.Remove(targetId);
-            if (removedDisk) DataStore.SaveOverrides(diskOverrides);
-
-            LogToAdmin(adminPeer, removed || removedDisk
-                ? $"Revoked override for {targetId}."
-                : $"No active override found for {targetId}.");
-            return true;
-        }
-
         private static bool CmdRemove(ZNetPeer adminPeer, string[] tokens)
         {
             if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
@@ -140,6 +103,7 @@ namespace CharacterVault.Systems
             if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
 
             bool wiped = DataStore.WipePlayerData(targetId);
+            BindingManager.Load();
 
             if (wiped)
             {
@@ -177,12 +141,9 @@ namespace CharacterVault.Systems
 
             var binding = BindingManager.GetRegisteredName(targetId);
             var snapshot = DataStore.LoadSnapshot(targetId);
-            bool hasOverride = OverrideManager.HasOverride(targetId);
-
             var sb = new StringBuilder($"Status for {targetId}:\n");
             sb.AppendLine($"  Binding:   {(binding != null ? $"'{binding}'" : "Not registered")}");
-            sb.AppendLine($"  Snapshot:  {(snapshot != null ? $"Taken {snapshot.SnapshotTime:yyyy-MM-dd HH:mm} UTC" : "None")}");
-            sb.Append($"  Override:  {(hasOverride ? "ACTIVE (will consume on next join)" : "None")}");
+            sb.Append($"  Snapshot:  {(snapshot != null ? $"Taken {snapshot.SnapshotTime:yyyy-MM-dd HH:mm} UTC" : "None")}");
 
             LogToAdmin(adminPeer, sb.ToString());
             return true;
@@ -199,7 +160,11 @@ namespace CharacterVault.Systems
                 return false;
             }
             targetId = tokens[index];
-            return true;
+            if (ZNetHelper.IsValidPlayerId(targetId))
+                return true;
+
+            LogToAdmin(adminPeer, "Invalid player ID. Use the platform ID shown in /sc list, such as Steam_... or Xbox_....");
+            return false;
         }
 
         private static bool IsAdmin(string playerId)
@@ -240,13 +205,10 @@ namespace CharacterVault.Systems
 
         private static string PrintHelp() =>
             "CharacterVault Admin Commands:\n" +
-            "  /sc allow [playerId]  — One-time override for mismatched player\n" +
-            "  /sc deny [playerId]   — Revoke pending override\n" +
             "  /sc remove [playerId] — Remove character binding (allows re-register)\n" +
             "  /sc wipe [playerId]   — Delete ALL server data for player (blank slate next join)\n" +
             "  /sc list             — Show all bindings\n" +
             "  /sc status [playerId] — Show binding + snapshot info\n" +
-            "  /sc help             — This message\n" +
-            $"  Override file: {DataStore.OverridesFilePath}";
+            "  /sc help             — This message";
     }
 }

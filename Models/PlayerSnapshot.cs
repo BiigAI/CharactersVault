@@ -3,12 +3,12 @@
 namespace CharacterVault.Models
 {
     /// <summary>
-    /// A point-in-time snapshot of a player's character state captured from server-side ZDO data.
+    /// A point-in-time snapshot of a player's character state received from the client.
     /// Stored as raw base64-encoded ZPackage bytes to remain agnostic of Valheim version changes.
     /// </summary>
     public class PlayerSnapshot
     {
-        /// <summary>Steam ID (SteamID64) of the player this snapshot belongs to.</summary>
+        /// <summary>Platform ID reported by Valheim for the player this snapshot belongs to.</summary>
         public string PlayerId { get; set; }
 
         /// <summary>Character name at snapshot time (for audit / display).</summary>

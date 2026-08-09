@@ -41,11 +41,6 @@ namespace CharacterVault
                 ModConfig.Initialize(Config);
 
                 // 2. Server-only: initialize file storage and load persisted data
-                //    Clients don't store any character data — the server is authoritative.
-                //    We detect the role at RPC registration time, but we can still guard
-                //    here by checking if BepInEx is running in a server/headless context.
-                //    On a client, DataStore and BindingManager init is a no-op but we
-                //    call them anyway — they're lightweight and harmless on client.
                 DataStore.Initialize();
                 BindingManager.Load();
 

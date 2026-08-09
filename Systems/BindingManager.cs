@@ -5,7 +5,7 @@ using CharacterVault.Models;
 namespace CharacterVault.Systems
 {
     /// <summary>
-    /// Manages the permanent Steam ID → character name bindings.
+    /// Manages the permanent platform ID → character name bindings.
     /// Once a player registers (first successful join), they may only join with that character name.
     /// </summary>
     public static class BindingManager
@@ -22,15 +22,15 @@ namespace CharacterVault.Systems
         /// <summary>Persist current bindings to disk.</summary>
         private static void Save() => DataStore.SaveBindings(_bindings);
 
-        /// <summary>Returns true if this Steam ID has a registered binding.</summary>
+        /// <summary>Returns true if this platform ID has a registered binding.</summary>
         public static bool IsRegistered(string playerId) => _bindings.ContainsKey(playerId);
 
-        /// <summary>Returns the registered character name for a Steam ID, or null if not registered.</summary>
+        /// <summary>Returns the registered character name for a platform ID, or null if not registered.</summary>
         public static string? GetRegisteredName(string playerId) =>
             _bindings.TryGetValue(playerId, out CharacterRecord? record) ? record.CharacterName : null;
 
         /// <summary>
-        /// Registers a new Steam ID → character name binding.
+        /// Registers a new platform ID → character name binding.
         /// Only call if <see cref="IsRegistered"/> returns false.
         /// </summary>
         public static void Register(string playerId, string characterName)
@@ -72,6 +72,7 @@ namespace CharacterVault.Systems
         }
 
         /// <summary>Returns a copy of all current bindings for display purposes.</summary>
-        public static IReadOnlyDictionary<string, CharacterRecord> GetAll() => _bindings;
+        public static IReadOnlyDictionary<string, CharacterRecord> GetAll() =>
+            new Dictionary<string, CharacterRecord>(_bindings);
     }
 }

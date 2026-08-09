@@ -3,15 +3,15 @@
 namespace CharacterVault.Models
 {
     /// <summary>
-    /// Represents the permanent binding between a Steam ID and a registered character name.
+    /// Represents the permanent binding between a platform ID and a registered character name.
     /// Once registered, the player may only join with this character name.
     /// </summary>
     public class CharacterRecord
     {
-        /// <summary>Steam ID (SteamID64) of the player.</summary>
+        /// <summary>Platform ID reported by Valheim, such as Steam_... or Xbox_....</summary>
         public string PlayerId { get; set; }
 
-        /// <summary>The character name bound to this Steam ID.</summary>
+        /// <summary>The character name bound to this platform ID.</summary>
         public string CharacterName { get; set; } = string.Empty;
 
         /// <summary>UTC timestamp of when this binding was first created.</summary>
