@@ -13,6 +13,7 @@ $stagingDirectory = Join-Path $PSScriptRoot "staging"
 $archivePath = Join-Path $PSScriptRoot "$($manifest.name)-$version.zip"
 $releaseDirectory = Join-Path $projectRoot "bin\Release\net472"
 $pluginPath = Join-Path $releaseDirectory "CharactersVault.dll"
+$pluginDirectory = Join-Path $stagingDirectory "BepInEx\plugins\CharactersVault"
 
 if (-not $SkipBuild)
 {
@@ -64,7 +65,16 @@ New-Item $stagingDirectory -ItemType Directory | Out-Null
 
 foreach ($file in $requiredFiles)
 {
-    Copy-Item $file -Destination $stagingDirectory
+    $fileName = Split-Path $file -Leaf
+    if ($fileName -eq "CharactersVault.dll")
+    {
+        New-Item $pluginDirectory -ItemType Directory -Force | Out-Null
+        Copy-Item $file -Destination $pluginDirectory
+    }
+    else
+    {
+        Copy-Item $file -Destination $stagingDirectory
+    }
 }
 
 Compress-Archive -Path (Join-Path $stagingDirectory "*") -DestinationPath $archivePath -CompressionLevel Optimal
@@ -73,8 +83,18 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
 try
 {
-    $expectedEntries = @("README.md", "CHANGELOG.md", "manifest.json", "icon.png", "CharactersVault.dll")
-    $actualEntries = @($archive.Entries | ForEach-Object { $_.FullName })
+    $expectedEntries = @(
+        "README.md",
+        "CHANGELOG.md",
+        "manifest.json",
+        "icon.png",
+        "BepInEx/plugins/CharactersVault/CharactersVault.dll"
+    )
+    $actualEntries = @(
+        $archive.Entries |
+            Where-Object { -not $_.FullName.EndsWith("\") } |
+            ForEach-Object { $_.FullName.Replace("\", "/") }
+    )
     $missingEntries = @($expectedEntries | Where-Object { $_ -notin $actualEntries })
     $unexpectedEntries = @($actualEntries | Where-Object { $_ -notin $expectedEntries })
 

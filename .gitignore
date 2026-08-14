@@ -24,3 +24,8 @@ Thumbs.db
 # Thunderstore packaging output
 thunderstore/*.zip
 thunderstore/staging/
+
+# Version snapshots / backups
+CharactersVault_v2.3.0/
+CharactersVault_*/
+

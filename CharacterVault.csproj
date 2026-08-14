@@ -10,7 +10,6 @@
     <!-- Suppress auto-generated AssemblyInfo so Plugin.cs controls version -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Configurations>Debug;Release</Configurations>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <!--
@@ -50,11 +49,7 @@
       <HintPath>libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!--
-      Newtonsoft.Json is pulled from NuGet automatically — no need to copy the DLL manually.
-      ExcludeAssets=runtime means it won't be embedded in our output DLL;
-      BepInEx already ships its own copy that will be used at runtime.
-    -->
+    <!-- Newtonsoft.Json is used by the mod and supplied by the Valheim/BepInEx runtime. -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 

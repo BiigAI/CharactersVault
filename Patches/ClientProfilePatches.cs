@@ -327,8 +327,7 @@ namespace CharacterVault.Patches
 
         private static void ClearPlayerCollection(Player player, string fieldName)
         {
-            object collection = Traverse.Create(player).Field(fieldName).GetValue();
-            collection.GetType().GetMethod("Clear").Invoke(collection, null);
+            Traverse.Create(player).Field(fieldName).Method("Clear").GetValue();
         }
     }
 

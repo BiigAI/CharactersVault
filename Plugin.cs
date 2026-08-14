@@ -16,7 +16,7 @@ namespace CharacterVault
     {
         public const string ModGuid    = "com.charactervault.valheim";
         public const string ModName    = "CharactersVault";
-        public const string ModVersion = "2.3.1";
+        public const string ModVersion = "2.3.3";
 
         /// <summary>Static reference for accessing the plugin instance (e.g. for StartCoroutine).</summary>
         public static Plugin Instance { get; private set; } = null!;

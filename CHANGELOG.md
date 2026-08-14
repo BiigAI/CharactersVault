@@ -1,3 +1,12 @@
+## v2.3.3
+
+- Fixed compatibility issue that could cause the mod package to be incorrectly flagged by automated security scanners.
+- Minor internal code cleanup.
+
+## v2.3.2
+
+- Repackaged without bundling the shared `Newtonsoft.Json.dll` dependency.
+
 ## v2.3.1
 
 ### Character and platform identity
