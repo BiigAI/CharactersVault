@@ -1,4 +1,4 @@
-﻿using BepInEx.Configuration;
+using BepInEx.Configuration;
 
 namespace CharacterVault
 {
@@ -24,6 +24,10 @@ namespace CharacterVault
         /// giving up and disconnecting. Increase on high-latency connections.
         /// </summary>
         public static ConfigEntry<float> ProfileSyncTimeoutSeconds { get; private set; } = null!;
+
+        // ── UI ───────────────────────────────────────────────────────────────────
+        /// <summary>Show a warning banner on the character select screen.</summary>
+        public static ConfigEntry<bool> ShowCharacterSelectWarning { get; private set; } = null!;
 
         // ── Logging ──────────────────────────────────────────────────────────────
         public static ConfigEntry<bool> VerboseLogging { get; private set; } = null!;
@@ -54,6 +58,12 @@ namespace CharacterVault
                 15.0f,
                 "How long (seconds) the client waits for the server to send its profile data on join. " +
                 "If the server does not respond in time, the client disconnects. Default: 15.0");
+
+            ShowCharacterSelectWarning = cfg.Bind(
+                "UI",
+                "ShowCharacterSelectWarning",
+                true,
+                "Show a warning banner on the character selection screen reminding players that existing characters will be wiped on join.");
 
             VerboseLogging = cfg.Bind(
                 "Debug",

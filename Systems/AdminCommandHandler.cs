@@ -1,214 +1,201 @@
-﻿using System;
+using System;
 using System.Text;
 using CharacterVault.Helpers;
 
 namespace CharacterVault.Systems
 {
     /// <summary>
-    /// Processes admin commands received via server-side chat interception.
-    ///
-    /// Commands are prefixed with "/sc" and only execute if the sender is in the server's admin list.
-    ///
-    /// File-based administration (editing bindings.json directly) is always
-    /// available as a fallback and is the primary admin method for headless servers.
+    /// Handles in-game admin commands (/sc) sent from the client to the dedicated server.
     ///
     /// Available commands:
-    ///   /sc remove [playerId]  — Remove a character binding (player can re-register)
-    ///   /sc wipe [playerId]    — Fully delete all server data for a player (blank slate on next join)
-    ///   /sc list              — List all registered bindings
-    ///   /sc status [playerId]  — Show binding and last snapshot info for a player
-    ///   /sc help              — List commands
+    ///   /sc list              — List all registered character bindings
+    ///   /sc status [playerId]  — Show binding and snapshot info for a player
+    ///   /sc remove [playerId]  — Remove a character binding (allows re-register)
+    ///   /sc wipe [playerId]    — Fully delete all server data for a player
+    ///   /sc help              — Show command overview
     /// </summary>
     public static class AdminCommandHandler
     {
-        private const string Prefix = "/sc";
+        public const string RpcAdminCommand = "CharacterVault_AdminCmd";
+        public const string RpcAdminResponse = "CharacterVault_AdminResp";
 
-        /// <summary>
-        /// Returns true if the text starts with the command prefix.
-        /// </summary>
-        public static bool IsCommand(string text) =>
-            text.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Parse and execute an admin command. Logs the result.
-        /// </summary>
-        /// <param name="senderUid">Network UID of the player who sent the message.</param>
-        /// <param name="text">Full chat message text (including the /sc prefix).</param>
-        /// <returns>True if the command was recognized and handled, false otherwise.</returns>
-        public static bool Handle(long senderUid, string text)
+        public static void RegisterRPCs()
         {
-            ZNetPeer? peer = ZNet.instance?.GetPeer(senderUid);
-            if (peer == null) return false;
-            
-            string senderPlayerId = ZNetHelper.GetPlayerId(peer);
+            ZRoutedRpc.instance.Register<string>(RpcAdminCommand, RPC_AdminCommand);
+            ZRoutedRpc.instance.Register<string>(RpcAdminResponse, RPC_AdminResponse);
+        }
 
-            // Verify admin privileges
-            if (!IsAdmin(senderPlayerId))
+        /// <summary>
+        /// Called on client when the user enters an /sc command in chat or console.
+        /// </summary>
+        public static void SendAdminCommand(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            if (!text.StartsWith("/", StringComparison.OrdinalIgnoreCase))
+                text = "/" + text;
+
+            if (ZNet.instance == null)
             {
-                Plugin.Log.LogWarning($"[AdminCmd] Non-admin {senderPlayerId} tried to run: {text}");
-                return false;
+                DisplayResponse("<color=yellow>[CharactersVault]</color> Not connected to a server.");
+                return;
             }
 
-            // Strip prefix and split into tokens
-            string body = text.Substring(Prefix.Length).Trim();
-            string[] tokens = body.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (ZNet.instance.IsServer())
+            {
+                // Running on local server / host — execute directly
+                string response = ExecuteCommand(text);
+                DisplayResponse(response);
+                return;
+            }
 
+            // Client sending command to dedicated server
+            Plugin.Log.LogInfo($"[AdminCmd] Sending admin command to server: {text}");
+            ZRoutedRpc.instance.InvokeRoutedRPC(0L, RpcAdminCommand, text);
+        }
+
+        /// <summary>
+        /// Server-side RPC handler for incoming admin commands from clients.
+        /// </summary>
+        private static void RPC_AdminCommand(long sender, string text)
+        {
+            if (ZNet.instance == null || !ZNet.instance.IsServer()) return;
+
+            ZNetPeer? peer = ZNet.instance.GetPeer(sender);
+            if (peer == null) return;
+
+            string playerId = ZNetHelper.GetPlayerId(peer);
+
+            if (!ZNetHelper.IsAdmin(peer))
+            {
+                Plugin.Log.LogWarning($"[AdminCmd] Non-admin {playerId} (host: {peer.m_socket?.GetHostName()}) tried to run: {text}");
+                ZRoutedRpc.instance.InvokeRoutedRPC(sender, RpcAdminResponse, "<color=red>[CharactersVault] Access denied: You are not listed in the server's adminlist.txt.</color>");
+                return;
+            }
+
+            Plugin.Log.LogInfo($"[AdminCmd] Executing '{text}' for admin {playerId}");
+            string response = ExecuteCommand(text);
+            ZRoutedRpc.instance.InvokeRoutedRPC(sender, RpcAdminResponse, response);
+        }
+
+        /// <summary>
+        /// Client-side RPC handler for receiving admin command responses from the server.
+        /// </summary>
+        private static void RPC_AdminResponse(long sender, string response)
+        {
+            DisplayResponse(response);
+        }
+
+        private static void DisplayResponse(string response)
+        {
+            Plugin.Log.LogInfo($"[AdminCmd] Response:\n{response}");
+            if (Chat.instance != null)
+            {
+                Chat.instance.AddString(response);
+            }
+        }
+
+        /// <summary>
+        /// Parse and execute the command.
+        /// </summary>
+        private static string ExecuteCommand(string text)
+        {
+            string body = text;
+            if (body.StartsWith("/sc", StringComparison.OrdinalIgnoreCase))
+                body = body.Substring(3).Trim();
+            else if (body.StartsWith("sc", StringComparison.OrdinalIgnoreCase))
+                body = body.Substring(2).Trim();
+
+            string[] tokens = body.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (tokens.Length == 0)
             {
-                LogToAdmin(peer, PrintHelp());
-                return true;
+                return PrintHelp();
             }
 
             string command = tokens[0].ToLowerInvariant();
-
             switch (command)
             {
                 case "remove":
-                    return CmdRemove(peer, tokens);
+                    return CmdRemove(tokens);
 
                 case "wipe":
-                    return CmdWipe(peer, tokens);
+                    return CmdWipe(tokens);
 
                 case "list":
-                    return CmdList(peer);
+                    return CmdList();
 
                 case "status":
-                    return CmdStatus(peer, tokens);
+                    return CmdStatus(tokens);
 
                 case "help":
-                    LogToAdmin(peer, PrintHelp());
-                    return true;
+                    return PrintHelp();
 
                 default:
-                    LogToAdmin(peer, $"Unknown command '{command}'. Type /sc help for a list.");
-                    return true;
+                    return $"<color=yellow>[CharactersVault]</color> Unknown command '{command}'. Type <color=#33FF33>/sc help</color> for a list.";
             }
         }
 
-        // ── Commands ──────────────────────────────────────────────────────────────
-
-        private static bool CmdRemove(ZNetPeer adminPeer, string[] tokens)
+        private static string CmdRemove(string[] tokens)
         {
-            if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
+            if (tokens.Length < 2)
+                return "<color=yellow>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/sc remove Steam_76561198XXXXXXXXX</color>";
 
+            string targetId = tokens[1];
             bool removed = BindingManager.RemoveBinding(targetId);
-            LogToAdmin(adminPeer, removed
-                ? $"Removed binding for {targetId}. They may re-register with a new character."
-                : $"No binding found for {targetId}.");
-            return true;
+            return removed
+                ? $"<color=green>[CharactersVault]</color> Removed binding for {targetId}. They may re-register with a new character."
+                : $"<color=yellow>[CharactersVault]</color> No binding found for {targetId}.";
         }
 
-        private static bool CmdWipe(ZNetPeer adminPeer, string[] tokens)
+        private static string CmdWipe(string[] tokens)
         {
-            if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
+            if (tokens.Length < 2)
+                return "<color=yellow>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/sc wipe Steam_76561198XXXXXXXXX</color>";
 
+            string targetId = tokens[1];
             bool wiped = DataStore.WipePlayerData(targetId);
             BindingManager.Load();
 
-            if (wiped)
-            {
-                LogToAdmin(adminPeer,
-                    $"Wiped all server data for {targetId}. " +
-                    $"On their next join they will receive a blank character (no items, no skills).");
-            }
-            else
-            {
-                LogToAdmin(adminPeer, $"No data found for {targetId} — nothing to wipe.");
-            }
-            return true;
+            return wiped
+                ? $"<color=green>[CharactersVault]</color> Wiped all server data for {targetId}. On next join they will receive a blank character."
+                : $"<color=yellow>[CharactersVault]</color> No data found for {targetId} — nothing to wipe.";
         }
 
-        private static bool CmdList(ZNetPeer adminPeer)
+        private static string CmdList()
         {
             var bindings = BindingManager.GetAll();
             if (bindings.Count == 0)
-            {
-                LogToAdmin(adminPeer, "No character bindings registered.");
-                return true;
-            }
+                return "<color=yellow>[CharactersVault]</color> No character bindings registered.";
 
-            var sb = new StringBuilder($"Character Bindings ({bindings.Count}):\n");
+            var sb = new StringBuilder($"<color=cyan>[CharactersVault]</color> Character Bindings ({bindings.Count}):\n");
             foreach (var kvp in bindings)
-                sb.AppendLine($"  {kvp.Key} → '{kvp.Value.CharacterName}' (since {kvp.Value.RegisteredAt:yyyy-MM-dd})");
-
-            LogToAdmin(adminPeer, sb.ToString().TrimEnd());
-            return true;
+            {
+                sb.AppendLine($"  <color=#FFCC00>{kvp.Key}</color> → '{kvp.Value.CharacterName}' (since {kvp.Value.RegisteredAt:yyyy-MM-dd})");
+            }
+            return sb.ToString().TrimEnd();
         }
 
-        private static bool CmdStatus(ZNetPeer adminPeer, string[] tokens)
+        private static string CmdStatus(string[] tokens)
         {
-            if (!TryGetPlayerId(tokens, 1, adminPeer, out string targetId)) return true;
+            if (tokens.Length < 2)
+                return "<color=yellow>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/sc status Steam_76561198XXXXXXXXX</color>";
 
+            string targetId = tokens[1];
             var binding = BindingManager.GetRegisteredName(targetId);
             var snapshot = DataStore.LoadSnapshot(targetId);
-            var sb = new StringBuilder($"Status for {targetId}:\n");
+
+            var sb = new StringBuilder($"<color=cyan>[CharactersVault]</color> Status for {targetId}:\n");
             sb.AppendLine($"  Binding:   {(binding != null ? $"'{binding}'" : "Not registered")}");
             sb.Append($"  Snapshot:  {(snapshot != null ? $"Taken {snapshot.SnapshotTime:yyyy-MM-dd HH:mm} UTC" : "None")}");
-
-            LogToAdmin(adminPeer, sb.ToString());
-            return true;
-        }
-
-        // ── Helpers ───────────────────────────────────────────────────────────────
-
-        private static bool TryGetPlayerId(string[] tokens, int index, ZNetPeer adminPeer, out string targetId)
-        {
-            targetId = "";
-            if (tokens.Length <= index)
-            {
-                LogToAdmin(adminPeer, $"Invalid or missing player ID. Example: /sc {tokens[0]} Steam_76561198XXXXXXXXX");
-                return false;
-            }
-            targetId = tokens[index];
-            if (ZNetHelper.IsValidPlayerId(targetId))
-                return true;
-
-            LogToAdmin(adminPeer, "Invalid player ID. Use the platform ID shown in /sc list, such as Steam_... or Xbox_....");
-            return false;
-        }
-
-        private static bool IsAdmin(string playerId)
-        {
-            return ZNet.instance != null && ZNetHelper.IsAdmin(playerId);
-        }
-
-        private static void LogToAdmin(ZNetPeer adminPeer, string message)
-        {
-            // Log to BepInEx console (visible in server terminal)
-            Plugin.Log.LogInfo($"[AdminCmd] → {message}");
-
-            // Send as server message to the admin player
-            try
-            {
-                if (adminPeer != null)
-                {
-                    // Send via ZRoutedRpc as a "chat" message from server
-                    ZRoutedRpc.instance.InvokeRoutedRPC(
-                        adminPeer.m_uid,
-                        "ChatMessage",
-                        new object[]
-                        {
-                            adminPeer.m_refPos,          // position
-                            (int)Talker.Type.Normal, // chat type
-                            "CharacterVault",       // sender name
-                            message                   // message text
-                        }
-                    );
-                }
-            }
-            catch (Exception ex)
-            {
-                if (ModConfig.VerboseLogging.Value)
-                    Plugin.Log.LogWarning($"[AdminCmd] Could not send in-game response: {ex.Message}");
-            }
+            return sb.ToString();
         }
 
         private static string PrintHelp() =>
-            "CharacterVault Admin Commands:\n" +
-            "  /sc remove [playerId] — Remove character binding (allows re-register)\n" +
-            "  /sc wipe [playerId]   — Delete ALL server data for player (blank slate next join)\n" +
-            "  /sc list             — Show all bindings\n" +
-            "  /sc status [playerId] — Show binding + snapshot info\n" +
-            "  /sc help             — This message";
+            "<color=cyan>[CharactersVault]</color> Admin Commands:\n" +
+            "  <color=#33FF33>/sc list</color> — Show all bindings\n" +
+            "  <color=#33FF33>/sc status [playerId]</color> — Show binding + snapshot info\n" +
+            "  <color=#33FF33>/sc remove [playerId]</color> — Remove character binding (allows re-register)\n" +
+            "  <color=#33FF33>/sc wipe [playerId]</color> — Delete ALL server data for player (blank slate next join)\n" +
+            "  <color=#33FF33>/sc help</color> — This message";
     }
 }

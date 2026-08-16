@@ -56,6 +56,7 @@ namespace CharacterVault.Systems
             ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcProfileDataChunk, RPC_ProfileDataChunk);
             ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcSaveProfileChunk, RPC_SaveProfileChunk);
             ZRoutedRpc.instance.Register<string>(RpcKickReason, RPC_KickReason);
+            AdminCommandHandler.RegisterRPCs();
             Plugin.Log.LogInfo("[CharacterVault :: Network] RPC handlers registered.");
         }
 
@@ -71,15 +72,16 @@ namespace CharacterVault.Systems
         {
             if (ZNet.instance == null || !ZNet.instance.IsServer()) return;
 
+            Plugin.Log.LogWarning($"[CharacterVault :: Network] Rejecting peer {peer.m_uid} (platform ID {Helpers.ZNetHelper.GetPlayerId(peer)}): {reason}");
             ZRoutedRpc.instance.InvokeRoutedRPC(peer.m_uid, RpcKickReason, reason);
             StartCoroutine(DisconnectRejectedPeer(peer));
         }
 
         private IEnumerator DisconnectRejectedPeer(ZNetPeer peer)
         {
-            // Give the routed reason packet one update to reach the client before
-            // Valheim closes the peer and displays its generic kick panel.
-            yield return null;
+            // Give the routed reason packet enough time to reach the client across the network
+            // before Valheim closes the peer socket and displays the kick panel.
+            yield return new WaitForSecondsRealtime(1.0f);
 
             if (ZNet.instance == null || ZNet.instance.GetPeer(peer.m_uid) != peer)
                 yield break;
@@ -100,7 +102,7 @@ namespace CharacterVault.Systems
                 {
                     Plugin.Log.LogWarning($"[CharacterVault :: Network] Peer {sender} wrong mod version: '{version}' (expected '{Plugin.ModVersion}'). KICKING.");
                     var wrongPeer = ZNet.instance.GetPeer(sender);
-                    if (wrongPeer != null) ZNet.instance.Disconnect(wrongPeer);
+                    if (wrongPeer != null) RejectPeer(wrongPeer, $"CharactersVault version mismatch: client has v{version}, server requires v{Plugin.ModVersion}");
                     return;
                 }
 
@@ -153,7 +155,7 @@ namespace CharacterVault.Systems
         private IEnumerator HandshakeTimeout(ZNetPeer peer)
         {
             float timeout = ModConfig.ProfileSyncTimeoutSeconds.Value;
-            yield return new WaitForSeconds(timeout);
+            yield return new WaitForSecondsRealtime(timeout);
 
             if (ZNet.instance != null &&
                 ZNet.instance.GetPeer(peer.m_uid) != null &&
@@ -162,7 +164,7 @@ namespace CharacterVault.Systems
                 Plugin.Log.LogWarning(
                     $"[CharacterVault :: Network] Peer {peer.m_uid} TIMED OUT after {timeout}s waiting for handshake. " +
                     $"Client mod not installed or incompatible. KICKING PEER.");
-                ZNet.instance.Disconnect(peer);
+                RejectPeer(peer, "CharactersVault handshake timeout: server did not receive client handshake reply.");
             }
         }
 

@@ -23,7 +23,7 @@ Copy the following DLLs into this folder before building.
 | `BepInEx.dll` | BepInEx plugin framework |
 | `0Harmony.dll` | HarmonyX patching library |
 
-> **Note:** `Newtonsoft.Json.dll` is **not** needed here — it's pulled automatically via NuGet when you build.
+> **Note:** The mod uses a built-in zero-dependency JSON helper (`SimpleJson.cs`), so no third-party JSON libraries or NuGet packages are needed.
 
 ---
 

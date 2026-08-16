@@ -1,6 +1,6 @@
 {
   "name": "CharactersVault",
-  "version_number": "2.3.3",
+  "version_number": "2.4.0",
   "website_url": "https://github.com/BiigAI/CharactersVault",
   "description": "Server-authoritative Valheim character storage with one-character-per-player bindings.",
   "dependencies": [

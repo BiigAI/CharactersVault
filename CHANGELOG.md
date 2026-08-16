@@ -1,45 +1,17 @@
-## v2.3.3
+## v2.4.0
 
-- Fixed compatibility issue that could cause the mod package to be incorrectly flagged by automated security scanners.
-- Minor internal code cleanup.
+- **Character Selection Warning:** Added a reminder banner on the Character Selection screen to prevent accidental loss of existing character progression (can be toggled in config).
+- **Clear Disconnect Messages:** If a connection fails or is rejected (such as a mod version mismatch), the exact reason is now displayed directly on the disconnect screen.
 
-## v2.3.2
+## v2.3.4
 
-- Repackaged without bundling the shared `Newtonsoft.Json.dll` dependency.
+- Resolved Thunderstore packaging and automated scanner compatibility issues.
+- Excluded bundled `Newtonsoft.Json.dll` dependency from package output.
+- General packaging and internal cleanup.
 
 ## v2.3.1
 
-### Character and platform identity
-
-- Use Valheim platform IDs for bindings and snapshots instead of assuming every player has a Steam ID.
-- Accept the platform ID formats currently reported by Valheim for Steam and Xbox users, including `Steam_...` and `Xbox_...`.
-- Reject invalid platform IDs before they can be used as binding keys or snapshot filenames.
-- Update admin commands, logs, comments, and documentation to use `playerId` or `platform ID` terminology.
-
-### Profile transfer reliability
-
-- Bound incoming profile transfers to 64 MB.
-- Reject malformed transfers, invalid chunk indexes, inconsistent chunk counts, and oversized chunks.
-- Discard incomplete transfers when a peer disconnects.
-- Expire abandoned transfers after two minutes to prevent unbounded memory growth.
-- Reduce temporary memory usage during reassembly by writing chunks to a pre-sized stream.
-
-### Data safety
-
-- Write bindings and player snapshots to temporary files before replacing the live JSON file.
-- Reduce the risk of corrupted persistence files if the server stops during a write.
-- Refresh the in-memory binding cache immediately after an admin wipes player data.
-- Return a defensive copy from the binding list API so display code cannot mutate the live binding table accidentally.
-
-### Cleanup
-
-- Removed unused ZDO mismatch configuration and the inactive inventory/skill enforcement settings.
-- Removed the inactive override commands and override persistence code.
-- Removed the unused mismatch report model and reflection helper methods.
-- Updated comments and log messages to match the profile-sync implementation that is currently active.
-
-### Compatibility notes
-
-- PC Xbox Game Pass users are expected to work through Valheim crossplay, but this has not been tested with CharactersVault.
-- Game Pass users still need a client installation capable of running BepInEx and CharactersVault.
-- The existing character warning remains important: joining a CharactersVault server with an existing local character replaces that local character with the server-authoritative copy.
+- **Platform ID Support:** Added support for platform IDs (`Steam_...` and `Xbox_...`) for player bindings and snapshot files.
+- **Sync Reliability:** Added transfer size limits, chunk validation, and timeout handling for safer profile syncs.
+- **Data Safety:** Atomic file saves for bindings and snapshots to prevent corruption if the server crashes.
+- **Cleanup:** Removed obsolete config options, unused mismatch reports, and legacy code.

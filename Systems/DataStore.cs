@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json;
+using CharacterVault.Helpers;
 using CharacterVault.Models;
 
 namespace CharacterVault.Systems
@@ -20,12 +20,6 @@ namespace CharacterVault.Systems
         public static string BindingsFilePath => Path.Combine(_rootDir, "bindings.json");
         private static string SnapshotPath(string playerId) =>
             Path.Combine(_snapshotsDir, $"{playerId}.json");
-
-        private static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings
-        {
-            Formatting = Formatting.Indented,
-            NullValueHandling = NullValueHandling.Ignore
-        };
 
         /// <summary>
         /// Initialize directory structure. Called once at plugin startup.
@@ -53,7 +47,7 @@ namespace CharacterVault.Systems
                     return new Dictionary<string, CharacterRecord>();
 
                 string json = File.ReadAllText(BindingsFilePath);
-                var bindings = JsonConvert.DeserializeObject<Dictionary<string, CharacterRecord>>(json, JsonSettings)
+                var bindings = SimpleJson.DeserializeObject<Dictionary<string, CharacterRecord>>(json)
                     ?? new Dictionary<string, CharacterRecord>();
                 
                 return bindings;
@@ -69,7 +63,7 @@ namespace CharacterVault.Systems
         {
             try
             {
-                string json = JsonConvert.SerializeObject(bindings, JsonSettings);
+                string json = SimpleJson.SerializeObject(bindings, prettyPrint: true);
                 WriteAllTextAtomically(BindingsFilePath, json);
                 Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved {bindings.Count} binding(s) to '{BindingsFilePath}'");
             }
@@ -92,7 +86,7 @@ namespace CharacterVault.Systems
                     return null;
                 }
                 string json = File.ReadAllText(path);
-                var snapshot = JsonConvert.DeserializeObject<PlayerSnapshot>(json, JsonSettings);
+                var snapshot = SimpleJson.DeserializeObject<PlayerSnapshot>(json);
                 Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Loaded snapshot file for platform ID {playerId} from '{path}'");
                 return snapshot;
             }
@@ -108,7 +102,7 @@ namespace CharacterVault.Systems
             try
             {
                 string path = SnapshotPath(snapshot.PlayerId);
-                string json = JsonConvert.SerializeObject(snapshot, JsonSettings);
+                string json = SimpleJson.SerializeObject(snapshot, prettyPrint: true);
                 WriteAllTextAtomically(path, json);
                 Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}') -> '{path}'");
             }

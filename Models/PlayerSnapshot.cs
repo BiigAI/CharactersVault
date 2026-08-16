@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace CharacterVault.Models
 {
@@ -9,7 +9,7 @@ namespace CharacterVault.Models
     public class PlayerSnapshot
     {
         /// <summary>Platform ID reported by Valheim for the player this snapshot belongs to.</summary>
-        public string PlayerId { get; set; }
+        public string PlayerId { get; set; } = string.Empty;
 
         /// <summary>Character name at snapshot time (for audit / display).</summary>
         public string CharacterName { get; set; } = string.Empty;

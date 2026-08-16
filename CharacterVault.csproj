@@ -49,8 +49,6 @@
       <HintPath>libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- Newtonsoft.Json is used by the mod and supplied by the Valheim/BepInEx runtime. -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <!--

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace CharacterVault.Models
 {
@@ -9,7 +9,7 @@ namespace CharacterVault.Models
     public class CharacterRecord
     {
         /// <summary>Platform ID reported by Valheim, such as Steam_... or Xbox_....</summary>
-        public string PlayerId { get; set; }
+        public string PlayerId { get; set; } = string.Empty;
 
         /// <summary>The character name bound to this platform ID.</summary>
         public string CharacterName { get; set; } = string.Empty;

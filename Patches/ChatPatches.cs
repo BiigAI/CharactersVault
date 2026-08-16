@@ -1,43 +1,44 @@
-﻿using System;
+using System;
 using HarmonyLib;
 using CharacterVault.Systems;
-using UnityEngine;
 
 namespace CharacterVault.Patches
 {
     // ═══════════════════════════════════════════════════════════════════════════
-    // PATCH: Chat.RPC_ChatMessage — fires on server when any player sends a chat message
+    // PATCH: Terminal.TryRunCommand — intercepts "/sc" / "sc" commands
     //
-    // We intercept messages starting with "/sc" here. If the sender is a server admin,
-    // the message is routed to AdminCommandHandler and suppressed from normal chat.
+    // In Valheim, Chat inherits from Terminal. When a player types "/sc ...",
+    // Valheim strips the leading slash and calls Terminal.TryRunCommand("sc ...").
     //
-    // Valheim 0.221+ changed the signature: instead of a raw ZPackage, the method now
-    // receives parsed UserInfo and string text directly.
+    // We intercept all "sc" and "/sc" commands here and route them via our
+    // dedicated AdminCommandHandler RPC to the server.
     // ═══════════════════════════════════════════════════════════════════════════
-    [HarmonyPatch(typeof(Chat), "RPC_ChatMessage")]
-    public static class Chat_RPC_ChatMessage_Patch
+    [HarmonyPatch(typeof(Terminal), "TryRunCommand")]
+    public static class Terminal_TryRunCommand_Patch
     {
         [HarmonyPrefix]
-        public static bool Prefix(long sender, Vector3 position, int type, UserInfo userInfo, string text)
+        public static bool Prefix(Terminal __instance, string text)
         {
             try
             {
-                // Only process on server
-                if (ZNet.instance == null || !ZNet.instance.IsServer()) return true;
+                if (string.IsNullOrWhiteSpace(text)) return true;
 
-                // Only handle "/sc" commands
-                if (!AdminCommandHandler.IsCommand(text)) return true;
-
-                // Route to admin handler — suppress the chat message if it's a recognized command
-                bool handled = AdminCommandHandler.Handle(sender, text);
-                return !handled; // Return false (skip original) if we handled it
+                string trimmed = text.Trim();
+                if (trimmed.StartsWith("sc ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("sc", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("/sc ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("/sc", StringComparison.OrdinalIgnoreCase))
+                {
+                    AdminCommandHandler.SendAdminCommand(trimmed);
+                    return false; // Handled, suppress unknown command warning
+                }
             }
             catch (Exception ex)
             {
-                if (ModConfig.VerboseLogging.Value)
-                    Plugin.Log.LogWarning($"[ChatPatch] Exception in chat prefix: {ex.Message}");
-                return true;
+                Plugin.Log.LogError($"[TerminalPatch] Error in TryRunCommand prefix: {ex}");
             }
+
+            return true;
         }
     }
 }

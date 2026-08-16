@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using HarmonyLib;
 using CharacterVault.Helpers;
@@ -118,9 +118,20 @@ namespace CharacterVault.Patches
         [HarmonyPostfix]
         public static void Postfix(FejdStartup __instance)
         {
-            string? reason = ConnectionRejectionManager.ConsumeReason();
-            if (!string.IsNullOrWhiteSpace(reason))
-                Traverse.Create(__instance).Field("m_connectionFailedError").Property("text").SetValue(reason);
+            try
+            {
+                string? reason = ConnectionRejectionManager.ConsumeReason();
+                if (!string.IsNullOrWhiteSpace(reason))
+                {
+                    var textTraverse = Traverse.Create(__instance).Field("m_connectionFailedError");
+                    textTraverse.Property("text").SetValue(reason);
+                    Plugin.Log.LogInfo($"[ShowConnectError] Displaying rejection reason: {reason}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ShowConnectError] Failed to set error text: {ex.Message}");
+            }
         }
     }
 }
