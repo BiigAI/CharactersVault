@@ -349,6 +349,7 @@ namespace CharacterVault.Patches
             try
             {
                 Plugin.Log.LogInfo("[ClientProfilePatches] Saving profile before server disconnect.");
+                ClientSyncManager.Instance?.FlushImmediate("disconnect flush");
                 Game.instance.SavePlayerProfile(true);
             }
             catch (Exception ex)

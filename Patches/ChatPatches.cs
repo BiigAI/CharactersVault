@@ -5,12 +5,12 @@ using CharacterVault.Systems;
 namespace CharacterVault.Patches
 {
     // ═══════════════════════════════════════════════════════════════════════════
-    // PATCH: Terminal.TryRunCommand — intercepts "/sc" / "sc" commands
+    // PATCH: Terminal.TryRunCommand — intercepts "/cv" / "cv" / "/vault" commands
     //
-    // In Valheim, Chat inherits from Terminal. When a player types "/sc ...",
-    // Valheim strips the leading slash and calls Terminal.TryRunCommand("sc ...").
+    // In Valheim, Chat inherits from Terminal. When a player types "/cv ...",
+    // Valheim strips the leading slash and calls Terminal.TryRunCommand("cv ...").
     //
-    // We intercept all "sc" and "/sc" commands here and route them via our
+    // We intercept all "cv" and "vault" commands here and route them via our
     // dedicated AdminCommandHandler RPC to the server.
     // ═══════════════════════════════════════════════════════════════════════════
     [HarmonyPatch(typeof(Terminal), "TryRunCommand")]
@@ -24,10 +24,14 @@ namespace CharacterVault.Patches
                 if (string.IsNullOrWhiteSpace(text)) return true;
 
                 string trimmed = text.Trim();
-                if (trimmed.StartsWith("sc ", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("sc", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.StartsWith("/sc ", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("/sc", StringComparison.OrdinalIgnoreCase))
+                if (trimmed.StartsWith("cv ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("cv", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("/cv ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("/cv", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("vault ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("vault", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.StartsWith("/vault ", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("/vault", StringComparison.OrdinalIgnoreCase))
                 {
                     AdminCommandHandler.SendAdminCommand(trimmed);
                     return false; // Handled, suppress unknown command warning
@@ -42,3 +46,4 @@ namespace CharacterVault.Patches
         }
     }
 }
+

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using CharacterVault.Models;
 using UnityEngine;
@@ -9,7 +9,12 @@ namespace CharacterVault.Systems
     {
         public static ClientSyncManager Instance { get; private set; } = null!;
 
+        private const float DebounceDelaySeconds = 2.5f;
+
         private Coroutine? _syncCoroutine;
+        private bool _hasPendingSnapshot;
+        private float _pendingSnapshotTime;
+        private string _pendingReason = string.Empty;
 
         public static void Initialize()
         {
@@ -27,15 +32,49 @@ namespace CharacterVault.Systems
         {
             if (_syncCoroutine != null)
                 StopCoroutine(_syncCoroutine);
-
         }
 
+        private void Update()
+        {
+            if (_hasPendingSnapshot && Time.unscaledTime >= _pendingSnapshotTime)
+            {
+                ExecuteSnapshotUpload(_pendingReason);
+            }
+        }
+
+        /// <summary>
+        /// Schedules a live player data snapshot to be uploaded after a brief quiet window.
+        /// Rapid sequential calls (e.g. inventory item sorting) reset the timer, reducing network and disk churn.
+        /// </summary>
         public void QueueSnapshotUpdate(string reason)
         {
             if (ZNet.instance == null || ZNet.instance.IsServer() ||
                 Patches.ClientProfilePatches.IsWaitingForProfile() ||
                 Patches.ClientProfilePatches.IsInitializingFirstJoin())
                 return;
+
+            _hasPendingSnapshot = true;
+            _pendingReason = reason;
+            _pendingSnapshotTime = Time.unscaledTime + DebounceDelaySeconds;
+        }
+
+        /// <summary>
+        /// Immediately flushes any pending or uncommitted live player snapshot to the server.
+        /// Call during intentional saves and disconnects.
+        /// </summary>
+        public void FlushImmediate(string reason)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer() ||
+                Patches.ClientProfilePatches.IsWaitingForProfile() ||
+                Patches.ClientProfilePatches.IsInitializingFirstJoin())
+                return;
+
+            ExecuteSnapshotUpload(reason);
+        }
+
+        private void ExecuteSnapshotUpload(string reason)
+        {
+            _hasPendingSnapshot = false;
 
             try
             {
@@ -77,3 +116,4 @@ namespace CharacterVault.Systems
         }
     }
 }
+

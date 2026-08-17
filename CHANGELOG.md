@@ -1,3 +1,9 @@
+## v2.5.0
+
+- **Smoother Syncing & Performance:** Fast actions (like sorting items in chests or rapid skilling) are now bundled intelligently, greatly reducing network lag and server load without risking any lost progress.
+- **Admin Commands Prefix:** Updated admin commands to `/cv` (with `/vault` alias).
+- **Chat Formatting Fix:** Fixed an issue where raw color tags were displayed in chat when running admin commands.
+
 ## v2.4.0
 
 - **Character Selection Warning:** Added a reminder banner on the Character Selection screen to prevent accidental loss of existing character progression (can be toggled in config).
