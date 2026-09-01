@@ -49,6 +49,20 @@ namespace CharacterVault.Patches
                 FirstJoinInitializationPending = true;
                 _waitingForProfile = false;
                 Plugin.Log.LogInfo("[ClientProfilePatches] First join confirmed. Preserving appearance and clearing gameplay state after local profile load.");
+
+                if (Game.instance != null && Game.instance.GetPlayerProfile() != null && Player.m_localPlayer != null)
+                {
+                    try
+                    {
+                        var profile = Game.instance.GetPlayerProfile();
+                        Traverse.Create(profile).Method("LoadPlayerData", Player.m_localPlayer).GetValue();
+                        Plugin.Log.LogInfo("[ClientProfilePatches] Triggered initial LoadPlayerData for live Player on first join.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.LogError($"[ClientProfilePatches] Failed to trigger LoadPlayerData on first join: {ex}");
+                    }
+                }
                 return;
             }
 

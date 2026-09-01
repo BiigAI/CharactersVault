@@ -121,19 +121,29 @@ namespace CharacterVault.Systems
 
                 var snapshot = SnapshotManager.GetSnapshot(playerId);
 
+                bool hasValidSnapshot = snapshot != null &&
+                                        snapshot.HasData &&
+                                        string.Equals(snapshot.CharacterName, peer.m_playerName, StringComparison.OrdinalIgnoreCase);
+
                 byte[] profileBytes;
-                if (snapshot != null && snapshot.HasData)
+                if (hasValidSnapshot)
                 {
-                    profileBytes = snapshot.GetProfileBytes();
-                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> sending existing stored profile ({profileBytes.Length} bytes).");
+                    profileBytes = snapshot!.GetProfileBytes();
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> sending existing stored profile for '{snapshot.CharacterName}' ({profileBytes.Length} bytes).");
                 }
                 else
                 {
-                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> no stored snapshot (first join). Requesting client-side clean initialization.");
+                    if (snapshot != null && !string.IsNullOrEmpty(snapshot.CharacterName) && !string.Equals(snapshot.CharacterName, peer.m_playerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Plugin.Log.LogWarning($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> stored snapshot is for character '{snapshot.CharacterName}', but player joined with '{peer.m_playerName}'. Discarding old snapshot.");
+                        SnapshotManager.DeleteSnapshot(playerId);
+                    }
+
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> no valid snapshot for '{peer.m_playerName}' (first join). Requesting client-side clean initialization.");
                     profileBytes = Array.Empty<byte>();
                 }
 
-                SendProfileDataToClient(sender, profileBytes, snapshot != null && snapshot.IsPlayerData, snapshot == null);
+                SendProfileDataToClient(sender, profileBytes, hasValidSnapshot && snapshot!.IsPlayerData, !hasValidSnapshot);
             }
             else
             {
@@ -233,6 +243,18 @@ namespace CharacterVault.Systems
                 if (peer == null) return;
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
+
+                if (ModConfig.EnforceCharacterBinding.Value)
+                {
+                    string? registeredName = BindingManager.GetRegisteredName(playerId);
+                    if (string.IsNullOrEmpty(registeredName) ||
+                        !string.Equals(registeredName, peer.m_playerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Plugin.Log.LogWarning($"[CharacterVault :: Network] Ignored profile upload from peer {sender} (platform ID {playerId}, character '{peer.m_playerName}') because they are not currently bound to this character (registered: '{registeredName ?? "none"}').");
+                        return;
+                    }
+                }
+
                 Plugin.Log.LogInfo($"[CharacterVault :: Network] Server received full profile upload ({fullData.Length} bytes) from peer {sender} (platform ID {playerId}, Character '{peer.m_playerName}')");
 
                 var snapshot = SnapshotManager.CreateSnapshot(playerId, peer.m_playerName, fullData, isPlayerData);

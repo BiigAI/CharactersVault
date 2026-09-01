@@ -5,25 +5,46 @@ obj/
 # Referenced game DLLs (copy from game install - do not commit)
 libs/*.dll
 
-# IDE files
+# Visual Studio / IDE files
 .vs/
+.vscode/
+.idea/
 *.user
 *.suo
-.idea/
+*.userosscache
+*.sln.docstates
+*.sln.DotSettings.user
+_ReSharper*/
 
-# BepInEx auto-generated files
+# BepInEx & Valheim local files
 BepInEx/
+*.cfg
 
-# Local inspection scripts and game logs
+# Logs and Crash Dumps
+*.log
+*.dmp
 Test_logs/
+logs/
 
-# OS
+# OS metadata
 .DS_Store
+._*
 Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Temporary and backup files
+*.bak
+*.tmp
+*.temp
+*.swp
+*~
+*.orig
 
 # Thunderstore packaging output
-thunderstore/*.zip
-thunderstore/staging/
+[Tt]hunderstore/*.zip
+[Tt]hunderstore/staging/
 
 # Version snapshots / backups
 CharactersVault_v2.3.0/

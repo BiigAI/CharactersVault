@@ -51,6 +51,16 @@ namespace CharacterVault.Helpers
         }
 
         /// <summary>
+        /// Finds a connected peer matching the given platform ID.
+        /// </summary>
+        public static ZNetPeer? FindPeerByPlayerId(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return null;
+            return GetPeers().FirstOrDefault(p =>
+                p != null && string.Equals(GetPlayerId(p), playerId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
         /// Returns the real player ID string (e.g. Steam_1234567, Xbox_...).
         /// Handles raw numeric Steam IDs from ZSteamSocket and prefixes them with 'Steam_'.
         /// </summary>

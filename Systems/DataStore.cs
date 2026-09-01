@@ -112,26 +112,30 @@ namespace CharacterVault.Systems
             }
         }
 
-        // ── Wipe ──────────────────────────────────────────────────────────────────
-
-        public static bool WipePlayerData(string playerId)
+        public static bool DeleteSnapshot(string playerId)
         {
-            bool wiped = false;
-
             string snapshotPath = SnapshotPath(playerId);
             if (File.Exists(snapshotPath))
             {
                 try
                 {
                     File.Delete(snapshotPath);
-                    Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Wipe: deleted snapshot file for platform ID {playerId}.");
-                    wiped = true;
+                    Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Deleted snapshot file for platform ID {playerId}.");
+                    return true;
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError($"[CharacterVault :: DataStore] WIPE FAILED: Could not delete snapshot for {playerId}: {ex.Message}");
+                    Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to delete snapshot for {playerId}: {ex.Message}");
                 }
             }
+            return false;
+        }
+
+        // ── Wipe ──────────────────────────────────────────────────────────────────
+
+        public static bool WipePlayerData(string playerId)
+        {
+            bool wiped = DeleteSnapshot(playerId);
 
             var bindings = LoadBindings();
             if (bindings.ContainsKey(playerId))

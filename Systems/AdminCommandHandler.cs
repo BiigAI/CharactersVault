@@ -9,9 +9,8 @@ namespace CharacterVault.Systems
     ///
     /// Available commands:
     ///   /cv list              — List all registered character bindings
-    ///   /cv status [playerId]  — Show binding and snapshot info for a player
-    ///   /cv remove [playerId]  — Remove a character binding (allows re-register)
-    ///   /cv wipe [playerId]    — Fully delete all server data for a player
+    ///   /cv status [playerId] — Show binding and snapshot info for a player
+    ///   /cv reset [playerId]  — Reset a player (wipes binding and progression for a fresh start)
     ///   /cv help              — Show command overview
     /// </summary>
     public static class AdminCommandHandler
@@ -119,11 +118,12 @@ namespace CharacterVault.Systems
             string command = tokens[0].ToLowerInvariant();
             switch (command)
             {
-                case "remove":
-                    return CmdRemove(tokens);
-
                 case "wipe":
-                    return CmdWipe(tokens);
+                case "reset":
+                case "remove":
+                case "delete":
+                case "unbind":
+                    return CmdReset(tokens);
 
                 case "list":
                     return CmdList();
@@ -139,30 +139,26 @@ namespace CharacterVault.Systems
             }
         }
 
-        private static string CmdRemove(string[] tokens)
+        private static string CmdReset(string[] tokens)
         {
             if (tokens.Length < 2)
-                return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv remove Steam_76561198XXXXXXXXX</color>";
-
-            string targetId = tokens[1];
-            bool removed = BindingManager.RemoveBinding(targetId);
-            return removed
-                ? $"<color=#33FF33>[CharactersVault]</color> Removed binding for {targetId}. They may re-register with a new character."
-                : $"<color=#FFCC00>[CharactersVault]</color> No binding found for {targetId}.";
-        }
-
-        private static string CmdWipe(string[] tokens)
-        {
-            if (tokens.Length < 2)
-                return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv wipe Steam_76561198XXXXXXXXX</color>";
+                return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv reset Steam_76561198XXXXXXXXX</color>";
 
             string targetId = tokens[1];
             bool wiped = DataStore.WipePlayerData(targetId);
             BindingManager.Load();
 
-            return wiped
-                ? $"<color=#33FF33>[CharactersVault]</color> Wiped all server data for {targetId}. On next join they will receive a blank character."
-                : $"<color=#FFCC00>[CharactersVault]</color> No data found for {targetId} — nothing to wipe.";
+            if (wiped)
+            {
+                var onlinePeer = ZNetHelper.FindPeerByPlayerId(targetId);
+                if (onlinePeer != null)
+                {
+                    NetworkManager.Instance?.RejectPeer(onlinePeer, "Your character was reset by an administrator. You may reconnect with a fresh character.");
+                }
+                return $"<color=#33FF33>[CharactersVault]</color> Reset player {targetId}. Character lock and progression wiped. They may register a fresh character on next join.";
+            }
+
+            return $"<color=#FFCC00>[CharactersVault]</color> No data found for {targetId} — nothing to reset.";
         }
 
         private static string CmdList()
@@ -198,8 +194,7 @@ namespace CharacterVault.Systems
             "<color=#33CCFF>[CharactersVault]</color> Admin Commands:\n" +
             "  <color=#33FF33>/cv list</color> — Show all bindings\n" +
             "  <color=#33FF33>/cv status [playerId]</color> — Show binding + snapshot info\n" +
-            "  <color=#33FF33>/cv remove [playerId]</color> — Remove character binding (allows re-register)\n" +
-            "  <color=#33FF33>/cv wipe [playerId]</color> — Delete ALL server data for player (blank slate next join)\n" +
+            "  <color=#33FF33>/cv reset [playerId]</color> — Reset player progression & allow new character registration (aliases: /cv wipe, /cv remove)\n" +
             "  <color=#33FF33>/cv help</color> — This message";
     }
 }

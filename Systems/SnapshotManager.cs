@@ -43,5 +43,11 @@ namespace CharacterVault.Systems
             Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Saving snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}')...");
             DataStore.SaveSnapshot(snapshot);
         }
+
+        public static bool DeleteSnapshot(string playerId)
+        {
+            Plugin.Log.LogInfo($"[CharacterVault :: Snapshot] Deleting snapshot for platform ID {playerId}...");
+            return DataStore.DeleteSnapshot(playerId);
+        }
     }
 }

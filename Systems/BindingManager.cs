@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using CharacterVault.Models;
 
@@ -60,14 +60,15 @@ namespace CharacterVault.Systems
         }
 
         /// <summary>
-        /// Removes a binding entirely, allowing the player to re-register with a new character.
+        /// Removes a binding entirely and clears stored snapshot data, allowing the player to re-register with a fresh character.
         /// Intended for admin use only (e.g. player wants to reset, or made a mistake at first join).
         /// </summary>
         public static bool RemoveBinding(string playerId)
         {
+            DataStore.DeleteSnapshot(playerId);
             if (!_bindings.Remove(playerId)) return false;
             Save();
-            Plugin.Log.LogInfo($"[BindingManager] Removed binding for {playerId}");
+            Plugin.Log.LogInfo($"[BindingManager] Removed binding and snapshot for {playerId}");
             return true;
         }
 

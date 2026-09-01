@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
 using BepInEx.Configuration;
 
 namespace CharacterVault
@@ -70,6 +73,51 @@ namespace CharacterVault
                 "VerboseLogging",
                 false,
                 "Enable extra debug logging to the BepInEx console/log file.");
+
+            // Programmatically clean up any stale / orphaned entries (e.g. decommissioned WebPortal settings)
+            ClearOrphanedEntries(cfg);
+        }
+
+        /// <summary>
+        /// Programmatically removes any stale / orphaned configuration options (such as old WebPortal
+        /// or decommissioned settings) from the config file and rewrites it cleanly.
+        /// </summary>
+        private static void ClearOrphanedEntries(ConfigFile cfg)
+        {
+            try
+            {
+                PropertyInfo? prop = typeof(ConfigFile).GetProperty(
+                    "OrphanedEntries",
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+
+                Dictionary<ConfigDefinition, string>? orphaned = null;
+
+                if (prop != null)
+                {
+                    orphaned = prop.GetValue(cfg) as Dictionary<ConfigDefinition, string>;
+                }
+
+                if (orphaned == null)
+                {
+                    FieldInfo? field = typeof(ConfigFile).GetField(
+                        "<OrphanedEntries>k__BackingField",
+                        BindingFlags.NonPublic | BindingFlags.Instance)
+                        ?? typeof(ConfigFile).GetField("_orphanedEntries", BindingFlags.NonPublic | BindingFlags.Instance);
+
+                    orphaned = field?.GetValue(cfg) as Dictionary<ConfigDefinition, string>;
+                }
+
+                if (orphaned != null && orphaned.Count > 0)
+                {
+                    Plugin.Log.LogInfo($"[{Plugin.ModName}] Removing {orphaned.Count} stale/orphaned config entry/entries from {cfg.ConfigFilePath}...");
+                    orphaned.Clear();
+                    cfg.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[{Plugin.ModName}] Could not clean orphaned config entries: {ex.Message}");
+            }
         }
     }
 }

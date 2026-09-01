@@ -1,7 +1,23 @@
+## v2.6.0
+
+- **Unified Player Reset:** Streamlined player unbinding and data wipes into a single command: `/cv reset [playerId]` (with aliases `/cv wipe`, `/cv remove`, `/cv unbind`, `/cv delete`). This cleanly wipes server-side progress, deletes old saves, and removes the character lock in one step.
+- **Immediate Disconnect on Reset:** If an admin resets an online player, they are now immediately disconnected with a helpful message so they can join back fresh with a new character.
+- **Character Name Validation:** Joining with a new character name after an unbind or reset now automatically discards any old character saves to prevent accidental carryover.
+- **Updated README and Icon:** Updated the README and icon for the mod.
+
+### Bug Fixes & Improvements
+
+- **First-Join Reset Fix:** Fixed an issue where local inventory, skills, or items could carry over to the server when joining with a new character for the first time.
+- **Upload Protection:** Prevented players from accidentally overwriting server saves if they are not registered to that character name.
+- **Automatic Config Cleanup:** The mod now automatically removes old, unused configuration settings from previous versions on startup.
+
 ## v2.5.0
 
 - **Smoother Syncing & Performance:** Fast actions (like sorting items in chests or rapid skilling) are now bundled intelligently, greatly reducing network lag and server load without risking any lost progress.
 - **Admin Commands Prefix:** Updated admin commands to `/cv` (with `/vault` alias).
+
+### Bug Fixes
+
 - **Chat Formatting Fix:** Fixed an issue where raw color tags were displayed in chat when running admin commands.
 
 ## v2.4.0
