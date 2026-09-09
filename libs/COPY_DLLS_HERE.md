@@ -14,6 +14,7 @@ Copy the following DLLs into this folder before building.
 | `assembly_utils.dll` | Valheim utility and file helper types |
 | `UnityEngine.dll` | Unity engine base |
 | `UnityEngine.CoreModule.dll` | Unity core types |
+| `Splatform.dll` | Valheim storage platform and cloud types |
 
 ## From your BepInEx installation:
 `[Valheim Server Root]/BepInEx/core/`

@@ -1,3 +1,8 @@
+## v2.6.1
+
+- **Valheim 1.0 Compatibility:** Added full support for the Valheim 1.0 release! Resolved the crash during character saving and syncing caused by the game's internal updates, while maintaining seamless backwards compatibility with older versions.
+- **Save System Update:** Updated profile writing to work cleanly with Valheim 1.0's new platform storage system.
+
 ## v2.6.0
 
 - **Unified Player Reset:** Streamlined player unbinding and data wipes into a single command: `/cv reset [playerId]` (with aliases `/cv wipe`, `/cv remove`, `/cv unbind`, `/cv delete`). This cleanly wipes server-side progress, deletes old saves, and removes the character lock in one step.

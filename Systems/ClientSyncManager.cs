@@ -105,8 +105,8 @@ namespace CharacterVault.Systems
 
                     Plugin.Log.LogInfo("[ClientSyncManager] Running periodic profile sync to server.");
                     
-                    // Game.instance.SavePlayerProfile(true) triggers the SavePlayerToDisk which we intercept
-                    Game.instance.SavePlayerProfile(true);
+                    // SafeSavePlayerProfile triggers the SavePlayerToDisk which we intercept
+                    Patches.ClientProfilePatches.SafeSavePlayerProfile(true);
                 }
                 catch (Exception ex)
                 {

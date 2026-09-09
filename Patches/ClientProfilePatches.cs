@@ -144,6 +144,41 @@ namespace CharacterVault.Patches
             IsFirstJoinInitializationActive = false;
         }
 
+        /// <summary>
+        /// Safely triggers a player profile save on Game.instance across different Valheim game versions.
+        /// Handles both the 2-parameter signature SavePlayerProfile(bool setLogoutPoint, bool isFromRpc = false)
+        /// introduced in recent Valheim updates and the legacy 1-parameter signature SavePlayerProfile(bool setLogoutPoint)
+        /// on older server/game builds via reflection fallback.
+        /// </summary>
+        public static void SafeSavePlayerProfile(bool setLogoutPoint)
+        {
+            if (Game.instance == null) return;
+
+            try
+            {
+                // Native compiled call against updated assembly: SavePlayerProfile(bool, bool)
+                Game.instance.SavePlayerProfile(setLogoutPoint, false);
+            }
+            catch (MissingMethodException)
+            {
+                // Fallback for older server/client builds with SavePlayerProfile(bool)
+                try
+                {
+                    var legacyMethod = typeof(Game).GetMethod("SavePlayerProfile", new[] { typeof(bool) });
+                    if (legacyMethod != null)
+                    {
+                        legacyMethod.Invoke(Game.instance, new object[] { setLogoutPoint });
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogError($"[ClientProfilePatches] Legacy SavePlayerProfile invocation failed: {ex}");
+                }
+                throw;
+            }
+        }
+
         private static bool WriteServerDataToDisk(PlayerProfile profile, byte[] data)
         {
             if (data == null || data.Length == 0)
@@ -156,7 +191,7 @@ namespace CharacterVault.Patches
             {
                 string path = profile.GetPath();
                 FileHelpers.FileSource source = GetFileSource(profile);
-                var writer = new FileWriter(path, FileHelpers.FileHelperType.Binary, source);
+                var writer = new FileWriter(path, Splatform.CloudStorageFileGrouping.SameFileEnding, FileHelpers.FileHelperType.Binary, source);
                 writer.m_binary.Write(data);
                 writer.Finish();
 
@@ -364,7 +399,7 @@ namespace CharacterVault.Patches
             {
                 Plugin.Log.LogInfo("[ClientProfilePatches] Saving profile before server disconnect.");
                 ClientSyncManager.Instance?.FlushImmediate("disconnect flush");
-                Game.instance.SavePlayerProfile(true);
+                ClientProfilePatches.SafeSavePlayerProfile(true);
             }
             catch (Exception ex)
             {
