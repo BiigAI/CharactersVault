@@ -14,10 +14,17 @@ namespace CharacterVault
     {
         // ── Enforcement ──────────────────────────────────────────────────────────
         public static ConfigEntry<bool> EnforceCharacterBinding { get; private set; } = null!;
+        public static ConfigEntry<bool> AllowCharacterImportOnFirstJoin { get; private set; } = null!;
 
         // ── Client Sync ───────────────────────────────────────────────────────────
         /// <summary>How often the client performs a full profile sync as a safety net.</summary>
         public static ConfigEntry<float> AutoSaveIntervalMinutes { get; private set; } = null!;
+
+        /// <summary>Safeguard to block joining with an existing character that has progression to protect local saves.</summary>
+        public static ConfigEntry<bool> ProtectExistingCharacters { get; private set; } = null!;
+
+        /// <summary>Automatically create a timestamped backup of the local .fch file before any reset.</summary>
+        public static ConfigEntry<bool> AutoBackupBeforeReset { get; private set; } = null!;
 
         // ── Messages ─────────────────────────────────────────────────────────────
         public static ConfigEntry<string> KickMessageWrongCharacter { get; private set; } = null!;
@@ -29,7 +36,7 @@ namespace CharacterVault
         public static ConfigEntry<float> ProfileSyncTimeoutSeconds { get; private set; } = null!;
 
         // ── UI ───────────────────────────────────────────────────────────────────
-        /// <summary>Show a warning banner on the character select screen.</summary>
+        /// <summary>Show an informational banner on the character select screen.</summary>
         public static ConfigEntry<bool> ShowCharacterSelectWarning { get; private set; } = null!;
 
         // ── Logging ──────────────────────────────────────────────────────────────
@@ -43,11 +50,29 @@ namespace CharacterVault
                 true,
                 "If true, each platform ID may only join with the character name it first registered with.");
 
+            AllowCharacterImportOnFirstJoin = cfg.Bind(
+                "Enforcement",
+                "AllowCharacterImportOnFirstJoin",
+                false,
+                "If true, players joining without a server snapshot can import their existing character gear and skills instead of starting fresh.");
+
             AutoSaveIntervalMinutes = cfg.Bind(
                 "ClientSync",
                 "AutoSaveIntervalMinutes",
                 5.0f,
                 "How often (in minutes) the client performs a full profile sync. Default: 5.0");
+
+            ProtectExistingCharacters = cfg.Bind(
+                "ClientSync",
+                "ProtectExistingCharacters",
+                true,
+                "If true, safely disconnects players who join with an existing character with progression to protect their local save from accidental wipes.");
+
+            AutoBackupBeforeReset = cfg.Bind(
+                "ClientSync",
+                "AutoBackupBeforeReset",
+                true,
+                "If true, automatically creates a timestamped local backup of the character save file in CharactersVault_Backups before any reset.");
 
             KickMessageWrongCharacter = cfg.Bind(
                 "Messages",
@@ -66,7 +91,7 @@ namespace CharacterVault
                 "UI",
                 "ShowCharacterSelectWarning",
                 true,
-                "Show a warning banner on the character selection screen reminding players that existing characters will be wiped on join.");
+                "Show an informational banner on the character selection screen reminding players about server-side character rules.");
 
             VerboseLogging = cfg.Bind(
                 "Debug",

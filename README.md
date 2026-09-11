@@ -28,10 +28,13 @@ The configuration file is automatically created at `BepInEx/config/com.character
 | Section | Setting | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `Enforcement` | `EnforceCharacterBinding` | `true` | If true, each account/platform ID is locked to their first registered character. |
+| `Enforcement` | `AllowCharacterImportOnFirstJoin` | `false` | If true, players joining without a server snapshot import their existing gear/skills instead of starting fresh. |
+| `ClientSync` | `ProtectExistingCharacters` | `true` | Safely disconnects players who join with an existing character with progression to protect local saves. |
+| `ClientSync` | `AutoBackupBeforeReset` | `true` | Automatically creates a timestamped backup in `CharactersVault_Backups` before any local reset. |
 | `ClientSync` | `AutoSaveIntervalMinutes` | `5.0` | How often (in minutes) client profiles automatically sync to the server in the background. |
 | `ClientSync` | `ProfileSyncTimeoutSeconds` | `15.0` | Max seconds to wait for server profile data on join before timing out. |
 | `Messages` | `KickMessageWrongCharacter` | `Wrong Character` | Message displayed when a player is kicked for attempting to join with the wrong character. |
-| `UI` | `ShowCharacterSelectWarning` | `true` | Displays a warning banner on the character select screen reminding players about server-side character progression. |
+| `UI` | `ShowCharacterSelectWarning` | `true` | Displays an informational banner on the character select screen. |
 | `Debug` | `VerboseLogging` | `false` | Enables extra diagnostic logging in the BepInEx console and log file. |
 
 ---
@@ -41,13 +44,15 @@ The configuration file is automatically created at `BepInEx/config/com.character
 - **Admin Commands:** *(Chat or Console; requires admin permissions in `adminlist.txt`)*
   - `/cv list` *(alias `/vault list`)*: Lists all registered player platform IDs and their bound character names.
   - `/cv status <playerId>` *(alias `/vault status <playerId>`)*: Views the character binding and last saved snapshot timestamp for a player.
-  - `/cv reset <playerId>` *(aliases `/cv wipe`, `/cv remove`, `/cv unbind`, `/cv delete`)*: Wipes a player's server-side progression snapshot and removes their character lock so they can start fresh.
+  - `/cv unbind <playerId>`: Releases a player's character lock while preserving their server snapshot (lets them resume or switch).
+  - `/cv reset <playerId>` *(aliases `/cv wipe`, `/cv remove`, `/cv delete`)*: Completely wipes a player's server snapshot and binding for a fresh start.
+  - `/cv allow-import <playerId>` *(alias `/cv import`)*: Authorizes a player to import an existing character with progression on their next join.
   - `/cv help` *(alias `/vault help`)*: Displays the in-game command help overview.
 
 ---
 
 ## Compatibility & Safe Removal
-- **Save Integrity:** Always join a server with CharactersVault with a new character! Joining with old characters *WILL* wipe their inventory!
+- **Save Integrity & Protection:** Singleplayer and existing characters are protected! If a player joins with an existing character on a fresh-start server, the mod safely aborts the join to protect the character from being wiped. Automatic backups of `.fch` files are also saved to `CharactersVault_Backups/`.
 
 ### AI Disclosure 
 

@@ -58,10 +58,6 @@ namespace CharacterVault.Patches
                         }
                         BindingManager.RecordJoin(playerId);
                     }
-                    else
-                    {
-                        BindingManager.Register(playerId, characterName);
-                    }
                 }
                 else
                 {

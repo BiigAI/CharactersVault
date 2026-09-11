@@ -14,8 +14,8 @@ namespace CharacterVault.Patches
         private static GameObject? _warningBanner;
 
         private const string WarningText =
-            "<color=#FFCC00><b>CharactersVault:</b> Joining a server with this mod will wipe your selected character's items & skills!\n" +
-            "Create a new character, and use that character on the server.</color>";
+            "<color=#33CCFF><b>CharactersVault:</b></color> <color=#FFCC00>This server requires a fresh character.</color>\n" +
+            "<color=#FFFFFF>Existing characters are protected from accidental wipes. Automatic backups are enabled.</color>";
 
         [HarmonyPatch("SetupGui")]
         [HarmonyPostfix]

@@ -176,6 +176,39 @@ namespace CharacterVault.Systems
             return snapshotDeleted || bindingRemoved;
         }
 
+        /// <summary>
+        /// Creates a timestamped local backup of the character's .fch file inside
+        /// a 'CharactersVault_Backups' folder in the character directory before any reset.
+        /// </summary>
+        public static void BackupLocalProfile(PlayerProfile profile)
+        {
+            if (profile == null) return;
+            try
+            {
+                if (ModConfig.AutoBackupBeforeReset != null && !ModConfig.AutoBackupBeforeReset.Value) return;
+
+                string path = profile.GetPath();
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
+                string directory = Path.GetDirectoryName(path) ?? "";
+                string backupDir = Path.Combine(directory, "CharactersVault_Backups");
+                if (!Directory.Exists(backupDir))
+                    Directory.CreateDirectory(backupDir);
+
+                string fileName = Path.GetFileNameWithoutExtension(path);
+                string extension = Path.GetExtension(path);
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string backupPath = Path.Combine(backupDir, $"{fileName}_backup_{timestamp}{extension}");
+
+                File.Copy(path, backupPath, overwrite: true);
+                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Created local character backup: '{backupPath}'");
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[CharacterVault :: DataStore] Could not create local character backup: {ex.Message}");
+            }
+        }
+
         private static void WriteAllTextAtomically(string path, string content)
         {
             string temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";

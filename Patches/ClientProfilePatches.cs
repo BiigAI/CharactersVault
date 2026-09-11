@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using BepInEx;
 using HarmonyLib;
@@ -31,9 +32,13 @@ namespace CharacterVault.Patches
     {
         private static byte[]? _serverProfileData = null;
         private static bool _waitingForProfile = false;
+        private static bool _serverImportAllowed = false;
         private static Coroutine? _profileTimeoutCoroutine = null;
         internal static bool FirstJoinInitializationPending = false;
         internal static bool IsFirstJoinInitializationActive = false;
+
+        public static void SetServerImportAllowed(bool allowed) => _serverImportAllowed = allowed;
+        public static bool IsServerImportAllowed => _serverImportAllowed;
 
         // ── Public API (called by NetworkManager) ─────────────────────────────────
 
@@ -56,12 +61,12 @@ namespace CharacterVault.Patches
                 _waitingForProfile = false;
                 if (Player.m_localPlayer != null && Game.instance?.GetPlayerProfile() != null)
                 {
-                    ExecuteFirstJoinReset(Game.instance.GetPlayerProfile(), Player.m_localPlayer);
+                    HandleFirstJoin(Game.instance.GetPlayerProfile(), Player.m_localPlayer);
                 }
                 else
                 {
                     FirstJoinInitializationPending = true;
-                    Plugin.Log.LogInfo("[ClientProfilePatches] First join confirmed. Preserving appearance and clearing gameplay state after local profile load.");
+                    Plugin.Log.LogInfo("[ClientProfilePatches] First join confirmed. Waiting for player load to initialize or validate state.");
                 }
                 return;
             }
@@ -172,6 +177,7 @@ namespace CharacterVault.Patches
             }
             _serverProfileData = null;
             _waitingForProfile = false;
+            _serverImportAllowed = false;
             FirstJoinInitializationPending = false;
             IsFirstJoinInitializationActive = false;
         }
@@ -281,6 +287,118 @@ namespace CharacterVault.Patches
                 Plugin.Log.LogError($"[ClientProfilePatches] Failed to apply live player data: {ex}");
                 return false;
             }
+        }
+
+        internal static void HandleFirstJoin(PlayerProfile profile, Player player)
+        {
+            if (profile == null || player == null) return;
+
+            // Always create a safety net backup of the local .fch file before anything else
+            DataStore.BackupLocalProfile(profile);
+
+            if (_serverImportAllowed)
+            {
+                Plugin.Log.LogInfo($"[ClientProfilePatches] First-join character import permitted: adopting character '{profile.GetName()}' with current gear and skills.");
+                profile.SavePlayerData(player);
+                byte[] playerData = (byte[])Traverse.Create(profile).Field("m_playerData").GetValue();
+                NetworkManager.Instance.SendProfileDataToServer(playerData, isPlayerData: true);
+                return;
+            }
+
+            if (ModConfig.ProtectExistingCharacters.Value && HasExistingProgression(player))
+            {
+                Plugin.Log.LogWarning($"[ClientProfilePatches] Aborting join for '{profile.GetName()}': character has existing progression. Disconnecting to protect local save.");
+                ConnectionRejectionManager.SetReason(
+                    $"<color=#33CCFF>CharactersVault</color>\n\n" +
+                    $"Character <b><color=#FFCC00>{profile.GetName()}</color></b> has existing progression!\n\n" +
+                    $"To protect your character from being wiped, please create a new character to join this server."
+                );
+                Game.instance?.Disconnect();
+                return;
+            }
+
+            ExecuteFirstJoinReset(profile, player);
+        }
+
+        public static bool HasExistingProgression(Player player)
+        {
+            if (player == null) return false;
+
+            // 1. Check skills: any skill with level > 0.05 indicates played progress
+            try
+            {
+                var skills = Traverse.Create(player).Field("m_skills").GetValue<Skills>();
+                if (skills != null)
+                {
+                    var skillList = skills.GetSkillList();
+                    if (skillList != null && skillList.Any(s => s.m_level > 0.05f))
+                    {
+                        Plugin.Log.LogInfo("[ClientProfilePatches] Existing progression detected: character has leveled skills.");
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Check inventory: starter character only has rags (ArmorRagsChest / ArmorRagsLegs)
+            try
+            {
+                var inv = player.GetInventory();
+                if (inv != null)
+                {
+                    var items = inv.GetAllItems();
+                    if (items != null && items.Count > 0)
+                    {
+                        if (items.Count > 2)
+                        {
+                            Plugin.Log.LogInfo($"[ClientProfilePatches] Existing progression detected: inventory has {items.Count} items.");
+                            return true;
+                        }
+
+                        foreach (var item in items)
+                        {
+                            string prefabName = item.m_dropPrefab?.name ?? "";
+                            string sharedName = item.m_shared?.m_name ?? "";
+                            bool isStarterRag = prefabName.IndexOf("ArmorRags", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                                sharedName.IndexOf("rag", StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (!isStarterRag)
+                            {
+                                Plugin.Log.LogInfo($"[ClientProfilePatches] Existing progression detected: non-starter item '{prefabName}'.");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // 3. Check trophies, known materials, or known biomes
+            try
+            {
+                var trophies = Traverse.Create(player).Field("m_trophies").GetValue<List<string>>();
+                if (trophies != null && trophies.Count > 0)
+                {
+                    Plugin.Log.LogInfo("[ClientProfilePatches] Existing progression detected: trophies found.");
+                    return true;
+                }
+
+                var materials = Traverse.Create(player).Field("m_knownMaterial").GetValue<HashSet<string>>();
+                if (materials != null && materials.Count > 0)
+                {
+                    Plugin.Log.LogInfo("[ClientProfilePatches] Existing progression detected: known materials found.");
+                    return true;
+                }
+
+                var biomes = Traverse.Create(player).Field("m_knownBiome").GetValue<HashSet<Heightmap.Biome>>();
+                if (biomes != null && biomes.Count > 1)
+                {
+                    Plugin.Log.LogInfo("[ClientProfilePatches] Existing progression detected: explored biomes found.");
+                    return true;
+                }
+            }
+            catch { }
+
+            return false;
         }
 
         internal static void ExecuteFirstJoinReset(PlayerProfile profile, Player player)
@@ -426,7 +544,7 @@ namespace CharacterVault.Patches
             if (!ClientProfilePatches.FirstJoinInitializationPending) return;
 
             ClientProfilePatches.FirstJoinInitializationPending = false;
-            ClientProfilePatches.ExecuteFirstJoinReset(__instance, player);
+            ClientProfilePatches.HandleFirstJoin(__instance, player);
         }
 
         private static void ClearPlayerCollection(Player player, string fieldName)

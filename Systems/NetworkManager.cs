@@ -19,6 +19,7 @@ namespace CharacterVault.Systems
         private const string RpcSaveProfileChunk = "CharacterVault_SaveProfileChunk";
         private const string RpcProfileDataChunk = "CharacterVault_ProfileDataChunk";
         private const string RpcKickReason       = "CharacterVault_KickReason";
+        private const string RpcServerSettings   = "CharacterVault_ServerSettings";
 
         private const int ChunkSize = 500 * 1024; // 500 KB chunks
         private const int MaxProfileBytes = 8 * 1024 * 1024; // 8 MB max
@@ -56,8 +57,17 @@ namespace CharacterVault.Systems
             ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcProfileDataChunk, RPC_ProfileDataChunk);
             ZRoutedRpc.instance.Register<int, int, bool, bool, ZPackage>(RpcSaveProfileChunk, RPC_SaveProfileChunk);
             ZRoutedRpc.instance.Register<string>(RpcKickReason, RPC_KickReason);
+            ZRoutedRpc.instance.Register<bool>(RpcServerSettings, RPC_ServerSettings);
             AdminCommandHandler.RegisterRPCs();
             Plugin.Log.LogInfo("[CharacterVault :: Network] RPC handlers registered.");
+        }
+
+        private void RPC_ServerSettings(long sender, bool allowImport)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer()) return;
+
+            Plugin.Log.LogInfo($"[CharacterVault :: Network] Received server settings (allowImport={allowImport}).");
+            Patches.ClientProfilePatches.SetServerImportAllowed(allowImport);
         }
 
         private void RPC_KickReason(long sender, string reason)
@@ -123,6 +133,9 @@ namespace CharacterVault.Systems
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
                 Plugin.Log.LogInfo($"[CharacterVault :: Network] Checking snapshot store for platform ID {playerId} ('{peer.m_playerName}')...");
 
+                bool isImportAllowed = ModConfig.AllowCharacterImportOnFirstJoin.Value || BindingManager.ConsumeImportAllowed(playerId);
+                ZRoutedRpc.instance.InvokeRoutedRPC(sender, RpcServerSettings, isImportAllowed);
+
                 var snapshot = SnapshotManager.GetSnapshot(playerId);
 
                 bool hasValidSnapshot = snapshot != null &&
@@ -143,7 +156,7 @@ namespace CharacterVault.Systems
                         SnapshotManager.DeleteSnapshot(playerId);
                     }
 
-                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> no valid snapshot for '{peer.m_playerName}' (first join). Requesting client-side clean initialization.");
+                    Plugin.Log.LogInfo($"[CharacterVault :: Network] Peer {sender} (platform ID {playerId}) -> no valid snapshot for '{peer.m_playerName}' (first join). Import allowed: {isImportAllowed}.");
                     profileBytes = Array.Empty<byte>();
                 }
 
@@ -268,10 +281,10 @@ namespace CharacterVault.Systems
                 if (ModConfig.EnforceCharacterBinding.Value)
                 {
                     string? registeredName = BindingManager.GetRegisteredName(playerId);
-                    if (string.IsNullOrEmpty(registeredName) ||
+                    if (!string.IsNullOrEmpty(registeredName) &&
                         !string.Equals(registeredName, peer.m_playerName, StringComparison.OrdinalIgnoreCase))
                     {
-                        Plugin.Log.LogWarning($"[CharacterVault :: Network] Ignored profile upload from peer {sender} (platform ID {playerId}, character '{peer.m_playerName}') because they are not currently bound to this character (registered: '{registeredName ?? "none"}').");
+                        Plugin.Log.LogWarning($"[CharacterVault :: Network] Ignored profile upload from peer {sender} (platform ID {playerId}, character '{peer.m_playerName}') because they are not currently bound to this character (registered: '{registeredName}').");
                         return;
                     }
                 }
@@ -280,6 +293,11 @@ namespace CharacterVault.Systems
 
                 var snapshot = SnapshotManager.CreateSnapshot(playerId, peer.m_playerName, fullData, isPlayerData);
                 SnapshotManager.SaveSnapshot(snapshot);
+
+                if (ModConfig.EnforceCharacterBinding.Value && !BindingManager.IsRegistered(playerId))
+                {
+                    BindingManager.Register(playerId, peer.m_playerName);
+                }
             }
         }
 

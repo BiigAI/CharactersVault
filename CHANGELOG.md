@@ -1,8 +1,11 @@
 ## v2.7.0
 
-- **Reduced Server Lag:** Server saves now process in the background, eliminating stutter and lag spikes when saving profiles and sorting items.
+- **Accidental Wipe Protection & Safety Gate:** Joining with an existing character that has progression now safely disconnects the player instead of wiping their character, keeping singleplayer saves 100% safe.
+- **Automatic Character Backups:** Automatically creates a timestamped local backup of `.fch` files in `CharactersVault_Backups/` before any reset.
+- **Flexible Unbind & Character Import:** Split `/cv unbind` (retains server snapshot) from `/cv reset` (full wipe), and added `/cv allow-import` / `AllowCharacterImportOnFirstJoin` to allow intentional character imports.
+- **Reduced Server Lag:** Server saves now process asynchronously in the background, eliminating stutter and lag spikes when saving profiles.
 - **Connection & Join Fixes:** Fixed connection timeout kicks during world load, and added full support for Direct IP and LAN servers.
-- **Safer Saves & Logouts:** Quitting to the menu now immediately saves character progress to prevent rollbacks, and singleplayer characters are fully protected.
+- **Safer Saves & Logouts:** Quitting to the menu now immediately flushes character progress to prevent rollbacks.
 - **Server Stability & Security:** Hardened data transfers and improved save reliability on Linux and Docker servers.
 
 ## v2.6.1

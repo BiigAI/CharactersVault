@@ -59,6 +59,42 @@ namespace CharacterVault.Systems
             }
         }
 
+        private static readonly HashSet<string> _importAllowedPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Grants a one-time import authorization for a player on their next join.</summary>
+        public static void AllowImport(string playerId)
+        {
+            if (!string.IsNullOrEmpty(playerId))
+            {
+                _importAllowedPlayers.Add(playerId);
+                Plugin.Log.LogInfo($"[BindingManager] Granted one-time character import pass to {playerId}");
+            }
+        }
+
+        /// <summary>Checks and consumes a one-time import authorization for a player.</summary>
+        public static bool ConsumeImportAllowed(string playerId)
+        {
+            return !string.IsNullOrEmpty(playerId) && _importAllowedPlayers.Remove(playerId);
+        }
+
+        /// <summary>Checks if a player has an active one-time import authorization.</summary>
+        public static bool IsImportAllowed(string playerId)
+        {
+            return !string.IsNullOrEmpty(playerId) && _importAllowedPlayers.Contains(playerId);
+        }
+
+        /// <summary>
+        /// Removes a character binding from bindings.json, but retains their server snapshot.
+        /// This allows the player to resume their character or re-bind cleanly.
+        /// </summary>
+        public static bool UnbindPlayer(string playerId)
+        {
+            if (!_bindings.Remove(playerId)) return false;
+            Save();
+            Plugin.Log.LogInfo($"[BindingManager] Unbound player {playerId} (retained server snapshot).");
+            return true;
+        }
+
         /// <summary>
         /// Removes a binding entirely and clears stored snapshot data, allowing the player to re-register with a fresh character.
         /// Intended for admin use only (e.g. player wants to reset, or made a mistake at first join).
@@ -77,8 +113,12 @@ namespace CharacterVault.Systems
         /// </summary>
         public static bool WipePlayer(string playerId)
         {
-            bool bindingRemoved = RemoveBinding(playerId);
             bool snapshotDeleted = DataStore.DeleteSnapshot(playerId);
+            bool bindingRemoved = _bindings.Remove(playerId);
+            if (bindingRemoved)
+            {
+                Save();
+            }
             return bindingRemoved || snapshotDeleted;
         }
 

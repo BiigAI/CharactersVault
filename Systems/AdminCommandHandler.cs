@@ -118,12 +118,19 @@ namespace CharacterVault.Systems
             string command = tokens[0].ToLowerInvariant();
             switch (command)
             {
+                case "unbind":
+                    return CmdUnbind(tokens);
+
                 case "wipe":
                 case "reset":
                 case "remove":
                 case "delete":
-                case "unbind":
                     return CmdReset(tokens);
+
+                case "allow-import":
+                case "allowimport":
+                case "import":
+                    return CmdAllowImport(tokens);
 
                 case "list":
                     return CmdList();
@@ -137,6 +144,42 @@ namespace CharacterVault.Systems
                 default:
                     return $"<color=#FFCC00>[CharactersVault]</color> Unknown command '{command}'. Type <color=#33FF33>/cv help</color> for a list.";
             }
+        }
+
+        private static string CmdUnbind(string[] tokens)
+        {
+            if (tokens.Length < 2)
+                return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv unbind Steam_76561198XXXXXXXXX</color>";
+
+            string targetId = tokens[1];
+            if (!ZNetHelper.IsValidPlayerId(targetId))
+                return "<color=#FF4444>[CharactersVault]</color> Invalid player ID format. Example: <color=#33FF33>Steam_76561198XXXXXXXXX</color>";
+
+            bool unbound = BindingManager.UnbindPlayer(targetId);
+            if (unbound)
+            {
+                var onlinePeer = ZNetHelper.FindPeerByPlayerId(targetId);
+                if (onlinePeer != null)
+                {
+                    NetworkManager.Instance?.RejectPeer(onlinePeer, "Your character binding was released by an administrator. You may reconnect to re-bind or switch characters.");
+                }
+                return $"<color=#33FF33>[CharactersVault]</color> Unbound player {targetId}. Character lock released while retaining their server progression snapshot.";
+            }
+
+            return $"<color=#FFCC00>[CharactersVault]</color> No active binding found for {targetId}.";
+        }
+
+        private static string CmdAllowImport(string[] tokens)
+        {
+            if (tokens.Length < 2)
+                return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv allow-import Steam_76561198XXXXXXXXX</color>";
+
+            string targetId = tokens[1];
+            if (!ZNetHelper.IsValidPlayerId(targetId))
+                return "<color=#FF4444>[CharactersVault]</color> Invalid player ID format. Example: <color=#33FF33>Steam_76561198XXXXXXXXX</color>";
+
+            BindingManager.AllowImport(targetId);
+            return $"<color=#33FF33>[CharactersVault]</color> Granted one-time import pass to {targetId}. On their next join, their character's existing progression will be imported into the vault.";
         }
 
         private static string CmdReset(string[] tokens)
@@ -199,7 +242,9 @@ namespace CharacterVault.Systems
             "<color=#33CCFF>[CharactersVault]</color> Admin Commands:\n" +
             "  <color=#33FF33>/cv list</color> — Show all bindings\n" +
             "  <color=#33FF33>/cv status [playerId]</color> — Show binding + snapshot info\n" +
-            "  <color=#33FF33>/cv reset [playerId]</color> — Reset player progression & allow new character registration (aliases: /cv wipe, /cv remove)\n" +
+            "  <color=#33FF33>/cv unbind [playerId]</color> — Release character lock (retains server progression snapshot)\n" +
+            "  <color=#33FF33>/cv reset [playerId]</color> — Full wipe of progression and binding (aliases: /cv wipe, /cv remove)\n" +
+            "  <color=#33FF33>/cv allow-import [playerId]</color> — Authorize one-time import of an existing character\n" +
             "  <color=#33FF33>/cv help</color> — This message";
     }
 }
