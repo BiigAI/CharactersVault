@@ -82,52 +82,264 @@ namespace CharacterVault.Patches
 
             _serverProfileData = profileData;
 
-            if (Game.instance != null && Game.instance.GetPlayerProfile() != null)
+            var profile = Game.instance?.GetPlayerProfile();
+            if (profile != null)
             {
-                var profile = Game.instance.GetPlayerProfile();
-                string characterName = profile.GetName();
-
-                bool written = isPlayerData
-                    ? ApplyServerPlayerData(profile, profileData)
-                    : WriteServerDataToDisk(profile, profileData);
-
-                if (written)
+                bool diverged = HasDataDiverged(profile, profileData, isPlayerData);
+                if (diverged && ModConfig.PromptOnOfflineProgress != null && ModConfig.PromptOnOfflineProgress.Value)
                 {
-                    // A full .fch must be reloaded; live player data can be applied directly.
-                    if (!isPlayerData)
+                    Plugin.Log.LogWarning($"[ClientProfilePatches] Character '{profile.GetName()}' has offline progress. Prompting user before overwrite.");
+
+                    ShowYesNoPrompt(
+                        "Offline Progress Detected",
+                        "You've progressed offline on this character. These advancements will be removed upon joining the server.\n\nContinue?",
+                        onYes: () =>
+                        {
+                            if (ModConfig.AutoBackupBeforeReset != null && ModConfig.AutoBackupBeforeReset.Value)
+                            {
+                                DataStore.BackupLocalProfile(profile);
+                                Plugin.Log.LogInfo("[ClientProfilePatches] Created offline progress backup before server overwrite.");
+                            }
+                            ApplyServerProfile(profile, profileData, isPlayerData);
+                        },
+                        onNo: () =>
+                        {
+                            Plugin.Log.LogWarning("[ClientProfilePatches] Player cancelled joining server to protect offline progress. Disconnecting cleanly.");
+                            _waitingForProfile = false;
+                            ConnectionRejectionManager.SetReason(
+                                "<color=#33CCFF>CharactersVault</color>\n\n" +
+                                "Disconnected to protect your offline character progression.\n\n" +
+                                "To join this server without overwriting your singleplayer progress, please use a dedicated character for this server."
+                            );
+                            Game.instance?.Disconnect();
+                        }
+                    );
+                    return;
+                }
+
+                ApplyServerProfile(profile, profileData, isPlayerData);
+            }
+            else
+            {
+                _waitingForProfile = false;
+            }
+        }
+
+        private static void ApplyServerProfile(PlayerProfile profile, byte[] profileData, bool isPlayerData)
+        {
+            string characterName = profile.GetName();
+
+            bool written = isPlayerData
+                ? ApplyServerPlayerData(profile, profileData)
+                : WriteServerDataToDisk(profile, profileData);
+
+            if (written)
+            {
+                // A full .fch must be reloaded; live player data can be applied directly.
+                if (!isPlayerData)
+                {
+                    try
                     {
-                        try
-                        {
-                            Traverse.Create(profile).Method("LoadPlayerFromDisk").GetValue();
-                            profile.SetName(characterName);
-                            Plugin.Log.LogInfo("[ClientProfilePatches] Reloaded PlayerProfile memory from server data.");
-                        }
-                        catch (Exception ex)
-                        {
-                            Plugin.Log.LogError($"[ClientProfilePatches] Failed to reload PlayerProfile from disk: {ex.Message}");
-                        }
+                        Traverse.Create(profile).Method("LoadPlayerFromDisk").GetValue();
+                        profile.SetName(characterName);
+                        Plugin.Log.LogInfo("[ClientProfilePatches] Reloaded PlayerProfile memory from server data.");
                     }
-
-                    // 3. Release the load gate before applying the authoritative profile to the player.
-                    _waitingForProfile = false;
-
-                    // If local player has already spawned in-world, update live player state.
-                    if (Player.m_localPlayer != null)
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            Traverse.Create(profile).Method("LoadPlayerData", Player.m_localPlayer).GetValue();
-                            Plugin.Log.LogInfo("[ClientProfilePatches] Re-applied server profile data to live Player instance!");
-                        }
-                        catch (Exception ex)
-                        {
-                            Plugin.Log.LogError($"[ClientProfilePatches] Failed to apply server profile to live Player: {ex.Message}");
-                        }
+                        Plugin.Log.LogError($"[ClientProfilePatches] Failed to reload PlayerProfile from disk: {ex.Message}");
+                    }
+                }
+
+                // Release the load gate before applying the authoritative profile to the player.
+                _waitingForProfile = false;
+
+                // If local player has already spawned in-world, update live player state.
+                if (Player.m_localPlayer != null)
+                {
+                    try
+                    {
+                        Traverse.Create(profile).Method("LoadPlayerData", Player.m_localPlayer).GetValue();
+                        Plugin.Log.LogInfo("[ClientProfilePatches] Re-applied server profile data to live Player instance!");
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.LogError($"[ClientProfilePatches] Failed to apply server profile to live Player: {ex.Message}");
                     }
                 }
             }
 
             _waitingForProfile = false;
+        }
+
+        public static bool HasDataDiverged(PlayerProfile profile, byte[] serverData, bool isPlayerData)
+        {
+            if (profile == null || serverData == null || serverData.Length == 0)
+                return false;
+
+            try
+            {
+                byte[]? localData = null;
+                if (isPlayerData)
+                {
+                    localData = (byte[]?)Traverse.Create(profile).Field("m_playerData").GetValue();
+                    if (localData == null || localData.Length == 0)
+                    {
+                        localData = CaptureLivePlayerData();
+                    }
+                }
+                else
+                {
+                    localData = ReadProfileBytes(profile);
+                }
+
+                if (localData == null || localData.Length == 0)
+                    return false;
+
+                if (localData.Length != serverData.Length)
+                    return true;
+
+                for (int i = 0; i < localData.Length; i++)
+                {
+                    if (localData[i] != serverData[i])
+                        return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[ClientProfilePatches] Could not determine if profile data diverged: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static void ShowYesNoPrompt(string title, string text, Action onYes, Action onNo)
+        {
+            try
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+
+                Type? popupType = AccessTools.TypeByName("UnifiedPopup");
+                if (popupType != null)
+                {
+                    object? instance = AccessTools.Property(popupType, "instance")?.GetValue(null, null)
+                                    ?? AccessTools.Field(popupType, "instance")?.GetValue(null);
+
+                    Type? popupDataClass = popupType.GetNestedType("Popup") ?? popupType.GetNestedType("PopupData");
+                    if (instance != null && popupDataClass != null)
+                    {
+                        object? popupObj = null;
+                        foreach (var ctor in popupDataClass.GetConstructors())
+                        {
+                            var parameters = ctor.GetParameters();
+                            if (parameters.Length >= 4 &&
+                                parameters[0].ParameterType == typeof(string) &&
+                                parameters[1].ParameterType == typeof(string) &&
+                                typeof(Delegate).IsAssignableFrom(parameters[2].ParameterType) &&
+                                typeof(Delegate).IsAssignableFrom(parameters[3].ParameterType))
+                            {
+                                object[] args = new object[parameters.Length];
+                                args[0] = title;
+                                args[1] = text;
+                                args[2] = onYes;
+                                args[3] = onNo;
+                                for (int i = 4; i < parameters.Length; i++)
+                                {
+                                    args[i] = parameters[i].DefaultValue ?? (parameters[i].ParameterType.IsValueType ? Activator.CreateInstance(parameters[i].ParameterType) : null)!;
+                                }
+                                popupObj = ctor.Invoke(args);
+                                break;
+                            }
+                        }
+
+                        if (popupObj == null)
+                        {
+                            try
+                            {
+                                popupObj = Activator.CreateInstance(popupDataClass);
+                                SetMember(popupObj, "m_title", title);
+                                SetMember(popupObj, "Title", title);
+                                SetMember(popupObj, "m_text", text);
+                                SetMember(popupObj, "Text", text);
+                                SetMember(popupObj, "m_onOk", onYes);
+                                SetMember(popupObj, "m_onYes", onYes);
+                                SetMember(popupObj, "m_onCancel", onNo);
+                                SetMember(popupObj, "m_onNo", onNo);
+                            }
+                            catch { }
+                        }
+
+                        if (popupObj != null)
+                        {
+                            MethodInfo? method = AccessTools.Method(popupType, "AddPopup", new[] { popupDataClass })
+                                              ?? AccessTools.Method(popupType, "Push", new[] { popupDataClass })
+                                              ?? AccessTools.Method(popupType, "ShowPopup", new[] { popupDataClass })
+                                              ?? popupType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                                                          .FirstOrDefault(m => (m.Name == "AddPopup" || m.Name == "Push" || m.Name == "ShowPopup") &&
+                                                                               m.GetParameters().Length == 1 &&
+                                                                               m.GetParameters()[0].ParameterType.IsAssignableFrom(popupDataClass));
+
+                            if (method != null)
+                            {
+                                method.Invoke(method.IsStatic ? null : instance, new[] { popupObj });
+                                Plugin.Log.LogInfo("[ClientProfilePatches] Displayed offline progress confirmation dialog via UnifiedPopup.");
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to GuiPopup if UnifiedPopup is unavailable
+                Type? guiPopupType = AccessTools.TypeByName("GuiPopup");
+                if (guiPopupType != null)
+                {
+                    object? guiInstance = AccessTools.Property(guiPopupType, "instance")?.GetValue(null, null)
+                                       ?? AccessTools.Field(guiPopupType, "instance")?.GetValue(null);
+                    if (guiInstance != null)
+                    {
+                        var showMethod = guiPopupType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                            .FirstOrDefault(m => m.Name == "Show" && m.GetParameters().Length >= 3);
+                        if (showMethod != null)
+                        {
+                            var p = showMethod.GetParameters();
+                            if (p.Length == 4)
+                            {
+                                showMethod.Invoke(guiInstance, new object[] { title, text, onYes, onNo });
+                            }
+                            else if (p.Length == 3)
+                            {
+                                showMethod.Invoke(guiInstance, new object[] { text, onYes, onNo });
+                            }
+                            Plugin.Log.LogInfo("[ClientProfilePatches] Displayed offline progress confirmation dialog via GuiPopup.");
+                            return;
+                        }
+                    }
+                }
+
+                Plugin.Log.LogWarning("[ClientProfilePatches] UnifiedPopup / GuiPopup not available. Defaulting to proceed with join.");
+                onYes();
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ClientProfilePatches] Failed to show confirmation prompt: {ex}");
+                onYes();
+            }
+        }
+
+        private static void SetMember(object target, string name, object value)
+        {
+            var field = AccessTools.Field(target.GetType(), name);
+            if (field != null && field.FieldType.IsAssignableFrom(value.GetType()))
+            {
+                field.SetValue(target, value);
+                return;
+            }
+            var prop = AccessTools.Property(target.GetType(), name);
+            if (prop != null && prop.CanWrite && prop.PropertyType.IsAssignableFrom(value.GetType()))
+            {
+                prop.SetValue(target, value, null);
+            }
         }
 
         /// <summary>
@@ -704,6 +916,104 @@ namespace CharacterVault.Patches
             if (Player.m_localPlayer == null) return false;
             object? localSkills = Traverse.Create(Player.m_localPlayer).Field("m_skills").GetValue();
             return ReferenceEquals(localSkills, skills);
+        }
+    }
+
+    // ── Instant Death Profile Flush (Anti-Dupe) ───────────────────────────────
+    //
+    // Closes the Alt+F4 tombstone duplication exploit: Player.OnDeath clears inventory
+    // and drops a tombstone. Because live inventory sync is debounced by 2.5s, an Alt+F4
+    // during death animation previously left the server with the pre-death snapshot.
+    // Hooking OnDeath.Postfix flushes the empty inventory snapshot instantly (<1ms).
+    [HarmonyPatch(typeof(Player), "OnDeath")]
+    public static class Player_OnDeath_Flush_Patch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(Player __instance)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer() || __instance != Player.m_localPlayer)
+                return;
+
+            try
+            {
+                Plugin.Log.LogInfo("[ClientProfilePatches] Local player died — executing IMMEDIATE profile flush to prevent tombstone dupe.");
+                ClientSyncManager.Instance?.FlushImmediate("player death");
+                ClientProfilePatches.SafeSavePlayerProfile(false);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ClientProfilePatches] Failed to flush profile on player death: {ex}");
+            }
+        }
+    }
+
+    // ── Instant Tombstone Loot Flush (Anti-Void) ──────────────────────────────
+    //
+    // Prevents item voiding if the client crashes or disconnects right after looting
+    // a tombstone. Flushes the newly recovered gear immediately so the server snapshot
+    // matches the player's recovered inventory before the tombstone vanishes.
+    [HarmonyPatch]
+    public static class TombStone_Interact_Flush_Patch
+    {
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            foreach (MethodInfo method in AccessTools.GetDeclaredMethods(typeof(TombStone)))
+            {
+                if (method.Name == "Interact")
+                    yield return method;
+            }
+        }
+
+        [HarmonyPostfix]
+        public static void Postfix(TombStone __instance, Humanoid character)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer() || character != Player.m_localPlayer)
+                return;
+
+            try
+            {
+                Plugin.Log.LogInfo("[ClientProfilePatches] Tombstone interact — executing IMMEDIATE profile flush to prevent item voiding.");
+                ClientSyncManager.Instance?.FlushImmediate("tombstone interact");
+                ClientProfilePatches.SafeSavePlayerProfile(false);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ClientProfilePatches] Failed to flush profile on tombstone interact: {ex}");
+            }
+        }
+    }
+
+    [HarmonyPatch]
+    public static class Container_TakeAll_Tombstone_Flush_Patch
+    {
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            foreach (MethodInfo method in AccessTools.GetDeclaredMethods(typeof(Container)))
+            {
+                if (method.Name == "TakeAll")
+                    yield return method;
+            }
+        }
+
+        [HarmonyPostfix]
+        public static void Postfix(Container __instance, Humanoid character)
+        {
+            if (ZNet.instance == null || ZNet.instance.IsServer() || character != Player.m_localPlayer)
+                return;
+
+            if (__instance is TombStone)
+            {
+                try
+                {
+                    Plugin.Log.LogInfo("[ClientProfilePatches] Tombstone TakeAll — executing IMMEDIATE profile flush.");
+                    ClientSyncManager.Instance?.FlushImmediate("tombstone take all");
+                    ClientProfilePatches.SafeSavePlayerProfile(false);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogError($"[ClientProfilePatches] Failed to flush profile on tombstone take all: {ex}");
+                }
+            }
         }
     }
 }

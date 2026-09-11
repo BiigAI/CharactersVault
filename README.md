@@ -31,10 +31,10 @@ The configuration file is automatically created at `BepInEx/config/com.character
 | `Enforcement` | `AllowCharacterImportOnFirstJoin` | `false` | If true, players joining without a server snapshot import their existing gear/skills instead of starting fresh. |
 | `ClientSync` | `ProtectExistingCharacters` | `true` | Safely disconnects players who join with an existing character with progression to protect local saves. |
 | `ClientSync` | `AutoBackupBeforeReset` | `true` | Automatically creates a timestamped backup in `CharactersVault_Backups` before any local reset. |
+| `ClientSync` | `PromptOnOfflineProgress` | `true` | Prompts player with a confirmation dialog when joining if offline progress is detected, warning before overwrite. |
 | `ClientSync` | `AutoSaveIntervalMinutes` | `5.0` | How often (in minutes) client profiles automatically sync to the server in the background. |
 | `ClientSync` | `ProfileSyncTimeoutSeconds` | `15.0` | Max seconds to wait for server profile data on join before timing out. |
 | `Messages` | `KickMessageWrongCharacter` | `Wrong Character` | Message displayed when a player is kicked for attempting to join with the wrong character. |
-| `UI` | `ShowCharacterSelectWarning` | `true` | Displays an informational banner on the character select screen. |
 | `Debug` | `VerboseLogging` | `false` | Enables extra diagnostic logging in the BepInEx console and log file. |
 
 ---

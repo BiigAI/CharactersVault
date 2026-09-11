@@ -26,6 +26,9 @@ namespace CharacterVault
         /// <summary>Automatically create a timestamped backup of the local .fch file before any reset.</summary>
         public static ConfigEntry<bool> AutoBackupBeforeReset { get; private set; } = null!;
 
+        /// <summary>Prompt the player when joining if they have progressed offline.</summary>
+        public static ConfigEntry<bool> PromptOnOfflineProgress { get; private set; } = null!;
+
         // ── Messages ─────────────────────────────────────────────────────────────
         public static ConfigEntry<string> KickMessageWrongCharacter { get; private set; } = null!;
 
@@ -34,10 +37,6 @@ namespace CharacterVault
         /// giving up and disconnecting. Increase on high-latency connections.
         /// </summary>
         public static ConfigEntry<float> ProfileSyncTimeoutSeconds { get; private set; } = null!;
-
-        // ── UI ───────────────────────────────────────────────────────────────────
-        /// <summary>Show an informational banner on the character select screen.</summary>
-        public static ConfigEntry<bool> ShowCharacterSelectWarning { get; private set; } = null!;
 
         // ── Logging ──────────────────────────────────────────────────────────────
         public static ConfigEntry<bool> VerboseLogging { get; private set; } = null!;
@@ -74,6 +73,12 @@ namespace CharacterVault
                 true,
                 "If true, automatically creates a timestamped local backup of the character save file in CharactersVault_Backups before any reset.");
 
+            PromptOnOfflineProgress = cfg.Bind(
+                "ClientSync",
+                "PromptOnOfflineProgress",
+                true,
+                "If true, prompts the player with a confirmation dialog when joining if they have progressed offline, warning them that offline changes will be overwritten.");
+
             KickMessageWrongCharacter = cfg.Bind(
                 "Messages",
                 "KickMessageWrongCharacter",
@@ -86,12 +91,6 @@ namespace CharacterVault
                 15.0f,
                 "How long (seconds) the client waits for the server to send its profile data on join. " +
                 "If the server does not respond in time, the client disconnects. Default: 15.0");
-
-            ShowCharacterSelectWarning = cfg.Bind(
-                "UI",
-                "ShowCharacterSelectWarning",
-                true,
-                "Show an informational banner on the character selection screen reminding players about server-side character rules.");
 
             VerboseLogging = cfg.Bind(
                 "Debug",
