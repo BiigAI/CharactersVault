@@ -1,3 +1,10 @@
+## v2.7.0
+
+- **Reduced Server Lag:** Server saves now process in the background, eliminating stutter and lag spikes when saving profiles and sorting items.
+- **Connection & Join Fixes:** Fixed connection timeout kicks during world load, and added full support for Direct IP and LAN servers.
+- **Safer Saves & Logouts:** Quitting to the menu now immediately saves character progress to prevent rollbacks, and singleplayer characters are fully protected.
+- **Server Stability & Security:** Hardened data transfers and improved save reliability on Linux and Docker servers.
+
 ## v2.6.1
 
 - **Valheim 1.0 Compatibility:** Added full support for the Valheim 1.0 release! Resolved the crash during character saving and syncing caused by the game's internal updates, while maintaining seamless backwards compatibility with older versions.

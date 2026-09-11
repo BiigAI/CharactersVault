@@ -90,13 +90,15 @@ namespace CharacterVault.Helpers
 
             foreach (char character in playerId)
             {
-                if (!char.IsLetterOrDigit(character) && character != '_' && character != '-')
+                if (!char.IsLetterOrDigit(character) && character != '_' && character != '-' && character != '.')
                     return false;
             }
 
             return playerId.StartsWith("Steam_", StringComparison.OrdinalIgnoreCase) ||
                    playerId.StartsWith("Xbox_", StringComparison.OrdinalIgnoreCase) ||
                    playerId.StartsWith("PlayFab_", StringComparison.OrdinalIgnoreCase) ||
+                   playerId.StartsWith("IP_", StringComparison.OrdinalIgnoreCase) ||
+                   System.Net.IPAddress.TryParse(playerId, out _) ||
                    ulong.TryParse(playerId, out _);
         }
 

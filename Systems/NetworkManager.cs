@@ -21,7 +21,7 @@ namespace CharacterVault.Systems
         private const string RpcKickReason       = "CharacterVault_KickReason";
 
         private const int ChunkSize = 500 * 1024; // 500 KB chunks
-        private const int MaxProfileBytes = 64 * 1024 * 1024;
+        private const int MaxProfileBytes = 8 * 1024 * 1024; // 8 MB max
         private const float IncomingTransferTimeoutSeconds = 120f;
 
         private readonly HashSet<long> _handshakeCompleted = new HashSet<long>();
@@ -86,7 +86,11 @@ namespace CharacterVault.Systems
             if (ZNet.instance == null || ZNet.instance.GetPeer(peer.m_uid) != peer)
                 yield break;
 
-            peer.m_rpc.Invoke("Error", (int)ZNet.ConnectionStatus.ErrorKicked);
+            try
+            {
+                peer.m_rpc?.Invoke("Error", (int)ZNet.ConnectionStatus.ErrorKicked);
+            }
+            catch { }
             ZNet.instance.Disconnect(peer);
         }
 
@@ -236,13 +240,30 @@ namespace CharacterVault.Systems
         {
             if (!ZNet.instance.IsServer()) return;
 
+            if (!_handshakeCompleted.Contains(sender))
+            {
+                Plugin.Log.LogWarning($"[CharacterVault :: Network] Rejected profile save from unauthenticated peer {sender}.");
+                return;
+            }
+
+            if (totalChunks <= 0)
+            {
+                Plugin.Log.LogWarning($"[CharacterVault :: Network] Rejected 0-chunk profile transfer from peer {sender}.");
+                return;
+            }
+
             byte[]? fullData = ProcessIncomingChunk(sender, totalChunks, chunkIndex, chunk.GetArray());
-            if (fullData != null)
+            if (fullData != null && fullData.Length > 0)
             {
                 var peer = ZNet.instance.GetPeer(sender);
                 if (peer == null) return;
 
                 string playerId = Helpers.ZNetHelper.GetPlayerId(peer);
+                if (!Helpers.ZNetHelper.IsValidPlayerId(playerId))
+                {
+                    Plugin.Log.LogWarning($"[CharacterVault :: Network] Rejected profile save: invalid platform ID '{playerId}' for peer {sender}.");
+                    return;
+                }
 
                 if (ModConfig.EnforceCharacterBinding.Value)
                 {
@@ -266,7 +287,7 @@ namespace CharacterVault.Systems
 
         private byte[]? ProcessIncomingChunk(long sender, int totalChunks, int chunkIndex, byte[] chunk)
         {
-            if (totalChunks == 0) return Array.Empty<byte>();
+            if (totalChunks <= 0) return null;
 
             int maximumChunkCount = Mathf.CeilToInt((float)MaxProfileBytes / ChunkSize);
             if (totalChunks < 1 || totalChunks > maximumChunkCount ||

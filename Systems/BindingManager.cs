@@ -72,6 +72,16 @@ namespace CharacterVault.Systems
             return true;
         }
 
+        /// <summary>
+        /// Removes a binding and deletes the player's snapshot from disk, keeping memory and disk fully synchronized.
+        /// </summary>
+        public static bool WipePlayer(string playerId)
+        {
+            bool bindingRemoved = RemoveBinding(playerId);
+            bool snapshotDeleted = DataStore.DeleteSnapshot(playerId);
+            return bindingRemoved || snapshotDeleted;
+        }
+
         /// <summary>Returns a copy of all current bindings for display purposes.</summary>
         public static IReadOnlyDictionary<string, CharacterRecord> GetAll() =>
             new Dictionary<string, CharacterRecord>(_bindings);

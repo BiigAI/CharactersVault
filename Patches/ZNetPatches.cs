@@ -56,14 +56,17 @@ namespace CharacterVault.Patches
                             KickPeer(peer, ModConfig.KickMessageWrongCharacter.Value);
                             return;
                         }
+                        BindingManager.RecordJoin(playerId);
                     }
                     else
                     {
                         BindingManager.Register(playerId, characterName);
                     }
                 }
-
-                BindingManager.RecordJoin(playerId);
+                else
+                {
+                    BindingManager.RecordJoin(playerId);
+                }
 
                 // ── Step 2: Trigger Handshake ─────────────────────────────────────────
                 NetworkManager.Instance.SendHandshakeRequest(peer);
@@ -104,11 +107,25 @@ namespace CharacterVault.Patches
             {
                 if (peer == null) return;
                 NetworkManager.Instance?.OnPeerDisconnected(peer.m_uid);
+                if (ZNet.instance == null || !ZNet.instance.IsServer())
+                {
+                    ClientProfilePatches.Reset();
+                }
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogError($"[ZNetPatch] Exception in Disconnect patch: {ex}");
             }
+        }
+    }
+
+    [HarmonyPatch(typeof(FejdStartup), "Awake")]
+    public static class FejdStartup_Awake_Patch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            ClientProfilePatches.Reset();
         }
     }
 
@@ -123,9 +140,40 @@ namespace CharacterVault.Patches
                 string? reason = ConnectionRejectionManager.ConsumeReason();
                 if (!string.IsNullOrWhiteSpace(reason))
                 {
-                    var textTraverse = Traverse.Create(__instance).Field("m_connectionFailedError");
-                    textTraverse.Property("text").SetValue(reason);
-                    Plugin.Log.LogInfo($"[ShowConnectError] Displaying rejection reason: {reason}");
+                    object? errorObj = Traverse.Create(__instance).Field("m_connectionFailedError").GetValue();
+                    if (errorObj != null)
+                    {
+                        bool applied = false;
+                        if (errorObj is GameObject go)
+                        {
+                            var components = go.GetComponentsInChildren<Component>();
+                            foreach (var comp in components)
+                            {
+                                if (comp == null) continue;
+                                var trav = Traverse.Create(comp);
+                                if (trav.Property("text").PropertyExists())
+                                {
+                                    trav.Property("text").SetValue(reason);
+                                    applied = true;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var trav = Traverse.Create(errorObj);
+                            if (trav.Property("text").PropertyExists())
+                            {
+                                trav.Property("text").SetValue(reason);
+                                applied = true;
+                            }
+                        }
+
+                        if (applied)
+                            Plugin.Log.LogInfo($"[ShowConnectError] Displaying rejection reason: {reason}");
+                        else
+                            Plugin.Log.LogWarning($"[ShowConnectError] Could not find text property on m_connectionFailedError to display: {reason}");
+                    }
                 }
             }
             catch (Exception ex)

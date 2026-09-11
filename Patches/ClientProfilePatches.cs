@@ -31,6 +31,7 @@ namespace CharacterVault.Patches
     {
         private static byte[]? _serverProfileData = null;
         private static bool _waitingForProfile = false;
+        private static Coroutine? _profileTimeoutCoroutine = null;
         internal static bool FirstJoinInitializationPending = false;
         internal static bool IsFirstJoinInitializationActive = false;
 
@@ -42,33 +43,35 @@ namespace CharacterVault.Patches
         /// </summary>
         public static void ReceiveServerProfile(byte[] profileData, bool isPlayerData, bool isFirstJoin)
         {
-            Plugin.Log.LogInfo($"[ClientProfilePatches] Received {profileData.Length} bytes from server.");
+            Plugin.Log.LogInfo($"[ClientProfilePatches] Received {profileData?.Length ?? 0} bytes from server.");
+
+            if (_profileTimeoutCoroutine != null && NetworkManager.Instance != null)
+            {
+                NetworkManager.Instance.StopCoroutine(_profileTimeoutCoroutine);
+                _profileTimeoutCoroutine = null;
+            }
 
             if (isFirstJoin)
             {
-                FirstJoinInitializationPending = true;
                 _waitingForProfile = false;
-                Plugin.Log.LogInfo("[ClientProfilePatches] First join confirmed. Preserving appearance and clearing gameplay state after local profile load.");
-
-                if (Game.instance != null && Game.instance.GetPlayerProfile() != null && Player.m_localPlayer != null)
+                if (Player.m_localPlayer != null && Game.instance?.GetPlayerProfile() != null)
                 {
-                    try
-                    {
-                        var profile = Game.instance.GetPlayerProfile();
-                        Traverse.Create(profile).Method("LoadPlayerData", Player.m_localPlayer).GetValue();
-                        Plugin.Log.LogInfo("[ClientProfilePatches] Triggered initial LoadPlayerData for live Player on first join.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Plugin.Log.LogError($"[ClientProfilePatches] Failed to trigger LoadPlayerData on first join: {ex}");
-                    }
+                    ExecuteFirstJoinReset(Game.instance.GetPlayerProfile(), Player.m_localPlayer);
+                }
+                else
+                {
+                    FirstJoinInitializationPending = true;
+                    Plugin.Log.LogInfo("[ClientProfilePatches] First join confirmed. Preserving appearance and clearing gameplay state after local profile load.");
                 }
                 return;
             }
 
             if (profileData == null || profileData.Length == 0)
             {
-                Plugin.Log.LogError("[ClientProfilePatches] Server returned an empty profile. Keeping local profile blocked.");
+                Plugin.Log.LogError("[ClientProfilePatches] Server returned an empty profile. Releasing load gate and disconnecting.");
+                _waitingForProfile = false;
+                ConnectionRejectionManager.SetReason("Server returned empty character profile data.");
+                Game.instance?.Disconnect();
                 return;
             }
 
@@ -130,6 +133,30 @@ namespace CharacterVault.Patches
             _serverProfileData = null;
             _waitingForProfile = true;
             Plugin.Log.LogInfo("[ClientProfilePatches] Waiting for server profile data...");
+
+            if (_profileTimeoutCoroutine != null && NetworkManager.Instance != null)
+            {
+                NetworkManager.Instance.StopCoroutine(_profileTimeoutCoroutine);
+            }
+
+            if (NetworkManager.Instance != null)
+            {
+                _profileTimeoutCoroutine = NetworkManager.Instance.StartCoroutine(ProfileTimeoutCoroutine());
+            }
+        }
+
+        private static IEnumerator ProfileTimeoutCoroutine()
+        {
+            float timeout = ModConfig.ProfileSyncTimeoutSeconds.Value;
+            yield return new WaitForSecondsRealtime(timeout);
+
+            if (_waitingForProfile)
+            {
+                Plugin.Log.LogWarning($"[ClientProfilePatches] Timed out after {timeout}s waiting for server profile data. Disconnecting.");
+                _waitingForProfile = false;
+                ConnectionRejectionManager.SetReason("CharactersVault sync timeout: server did not send profile data in time.");
+                Game.instance?.Disconnect();
+            }
         }
 
         public static bool IsWaitingForProfile() => _waitingForProfile;
@@ -138,6 +165,11 @@ namespace CharacterVault.Patches
 
         public static void Reset()
         {
+            if (_profileTimeoutCoroutine != null && NetworkManager.Instance != null)
+            {
+                try { NetworkManager.Instance.StopCoroutine(_profileTimeoutCoroutine); } catch { }
+                _profileTimeoutCoroutine = null;
+            }
             _serverProfileData = null;
             _waitingForProfile = false;
             FirstJoinInitializationPending = false;
@@ -251,11 +283,66 @@ namespace CharacterVault.Patches
             }
         }
 
+        internal static void ExecuteFirstJoinReset(PlayerProfile profile, Player player)
+        {
+            if (player == null || profile == null) return;
+
+            IsFirstJoinInitializationActive = true;
+            try
+            {
+                player.UnequipAllItems();
+                player.GetInventory()?.RemoveAll();
+                player.GiveDefaultItems();
+                player.SetGuardianPower(string.Empty);
+                Traverse.Create(player).Field("m_skills").GetValue<Skills>()?.Clear();
+                player.m_customData?.Clear();
+                ClearPlayerCollection(player, "m_foods");
+                ClearPlayerCollection(player, "m_knownRecipes");
+                ClearPlayerCollection(player, "m_knownStations");
+                ClearPlayerCollection(player, "m_knownMaterial");
+                ClearPlayerCollection(player, "m_shownTutorials");
+                ClearPlayerCollection(player, "m_uniques");
+                ClearPlayerCollection(player, "m_trophies");
+                ClearPlayerCollection(player, "m_knownBiome");
+                ClearPlayerCollection(player, "m_knownTexts");
+
+                profile.SavePlayerData(player);
+                byte[] playerData = (byte[])Traverse.Create(profile).Field("m_playerData").GetValue();
+                NetworkManager.Instance.SendProfileDataToServer(playerData, isPlayerData: true);
+                Plugin.Log.LogInfo("[ClientProfilePatches] Created initial clean player snapshot while preserving local appearance.");
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[ClientProfilePatches] Failed to initialize first-join player state: {ex}");
+            }
+            finally
+            {
+                IsFirstJoinInitializationActive = false;
+            }
+        }
+
+        private static void ClearPlayerCollection(Player player, string fieldName)
+        {
+            Traverse.Create(player).Field(fieldName).Method("Clear").GetValue();
+        }
+
         private static FileHelpers.FileSource GetFileSource(PlayerProfile profile)
         {
             return (FileHelpers.FileSource)Traverse.Create(profile).Field("m_fileSource").GetValue();
         }
 
+    }
+
+    // ── Patch 0: Early RPC Registration on ZRoutedRpc ─────────────────────────
+
+    [HarmonyPatch(typeof(ZRoutedRpc), "Awake")]
+    public static class ZRoutedRpc_Awake_Patch
+    {
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            NetworkManager.Instance?.RegisterRPCs();
+        }
     }
 
     // ── Patch 1: Game.Start — set up the wait state early ─────────────────────
@@ -270,14 +357,6 @@ namespace CharacterVault.Patches
             {
                 // Connecting to a dedicated server as a client
                 ClientProfilePatches.ExpectServerProfile();
-
-                // Register RPCs now that ZRoutedRpc is ready
-                NetworkManager.Instance.RegisterRPCs();
-            }
-            else if (ZNet.instance != null && ZNet.instance.IsServer())
-            {
-                // Server side RPC registration
-                NetworkManager.Instance.RegisterRPCs();
             }
         }
     }
@@ -337,46 +416,54 @@ namespace CharacterVault.Patches
         [HarmonyPostfix]
         public static void Postfix(PlayerProfile __instance, Player player)
         {
+            // CRITICAL: Prevent wiping player's single-player or local server character!
+            if (ZNet.instance == null || ZNet.instance.IsServer())
+            {
+                ClientProfilePatches.FirstJoinInitializationPending = false;
+                return;
+            }
+
             if (!ClientProfilePatches.FirstJoinInitializationPending) return;
 
             ClientProfilePatches.FirstJoinInitializationPending = false;
-            ClientProfilePatches.IsFirstJoinInitializationActive = true;
-            try
-            {
-                player.UnequipAllItems();
-                player.GetInventory().RemoveAll();
-                player.GiveDefaultItems();
-                player.SetGuardianPower(string.Empty);
-                Traverse.Create(player).Field("m_skills").GetValue<Skills>().Clear();
-                player.m_customData.Clear();
-                ClearPlayerCollection(player, "m_foods");
-                ClearPlayerCollection(player, "m_knownRecipes");
-                ClearPlayerCollection(player, "m_knownStations");
-                ClearPlayerCollection(player, "m_knownMaterial");
-                ClearPlayerCollection(player, "m_shownTutorials");
-                ClearPlayerCollection(player, "m_uniques");
-                ClearPlayerCollection(player, "m_trophies");
-                ClearPlayerCollection(player, "m_knownBiome");
-                ClearPlayerCollection(player, "m_knownTexts");
-
-                __instance.SavePlayerData(player);
-                byte[] playerData = (byte[])Traverse.Create(__instance).Field("m_playerData").GetValue();
-                NetworkManager.Instance.SendProfileDataToServer(playerData, isPlayerData: true);
-                Plugin.Log.LogInfo("[ClientProfilePatches] Created initial clean player snapshot while preserving local appearance.");
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.LogError($"[ClientProfilePatches] Failed to initialize first-join player state: {ex}");
-            }
-            finally
-            {
-                ClientProfilePatches.IsFirstJoinInitializationActive = false;
-            }
+            ClientProfilePatches.ExecuteFirstJoinReset(__instance, player);
         }
 
         private static void ClearPlayerCollection(Player player, string fieldName)
         {
             Traverse.Create(player).Field(fieldName).Method("Clear").GetValue();
+        }
+    }
+
+    // Hook Menu logout to initiate flush before socket teardown begins
+    [HarmonyPatch]
+    public static class Menu_OnQuit_SaveProfile_Patch
+    {
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            foreach (MethodInfo method in AccessTools.GetDeclaredMethods(typeof(Menu)))
+            {
+                if (method.Name == "OnQuitConfirm" || method.Name == "OnQuitYes" || method.Name == "OnAbort")
+                    yield return method;
+            }
+        }
+
+        [HarmonyPrefix]
+        public static void Prefix()
+        {
+            if (ZNet.instance != null && !ZNet.instance.IsServer() && Player.m_localPlayer != null)
+            {
+                try
+                {
+                    Plugin.Log.LogInfo("[ClientProfilePatches] Menu quit detected — flushing profile before disconnect.");
+                    ClientSyncManager.Instance?.FlushImmediate("menu quit");
+                    ClientProfilePatches.SafeSavePlayerProfile(true);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogError($"[ClientProfilePatches] Failed to save profile on menu quit: {ex}");
+                }
+            }
         }
     }
 

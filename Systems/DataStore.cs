@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using CharacterVault.Helpers;
 using CharacterVault.Models;
 
@@ -18,8 +19,15 @@ namespace CharacterVault.Systems
 
         // File paths
         public static string BindingsFilePath => Path.Combine(_rootDir, "bindings.json");
-        private static string SnapshotPath(string playerId) =>
-            Path.Combine(_snapshotsDir, $"{playerId}.json");
+        private static string SnapshotPath(string playerId)
+        {
+            if (!ZNetHelper.IsValidPlayerId(playerId))
+            {
+                Plugin.Log.LogWarning($"[CharacterVault :: DataStore] Invalid platform ID rejected: '{playerId}'");
+                return string.Empty;
+            }
+            return Path.Combine(_snapshotsDir, $"{playerId}.json");
+        }
 
         /// <summary>
         /// Initialize directory structure. Called once at plugin startup.
@@ -78,6 +86,8 @@ namespace CharacterVault.Systems
         public static PlayerSnapshot? LoadSnapshot(string playerId)
         {
             string path = SnapshotPath(playerId);
+            if (string.IsNullOrEmpty(path)) return null;
+
             try
             {
                 if (!File.Exists(path))
@@ -99,35 +109,51 @@ namespace CharacterVault.Systems
 
         public static void SaveSnapshot(PlayerSnapshot snapshot)
         {
-            try
+            if (snapshot == null || !ZNetHelper.IsValidPlayerId(snapshot.PlayerId))
             {
-                string path = SnapshotPath(snapshot.PlayerId);
-                string json = SimpleJson.SerializeObject(snapshot, prettyPrint: true);
-                WriteAllTextAtomically(path, json);
-                Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}') -> '{path}'");
+                Plugin.Log.LogWarning($"[CharacterVault :: DataStore] Cannot save snapshot with invalid or null platform ID.");
+                return;
             }
-            catch (Exception ex)
+
+            string path = SnapshotPath(snapshot.PlayerId);
+            if (string.IsNullOrEmpty(path)) return;
+
+            // Offload JSON serialization and disk write to background thread to avoid server main thread stutters
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to save snapshot for platform ID {snapshot.PlayerId}: {ex.Message}");
-            }
+                try
+                {
+                    string json = SimpleJson.SerializeObject(snapshot, prettyPrint: false);
+                    WriteAllTextAtomically(path, json);
+                    Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Saved snapshot for platform ID {snapshot.PlayerId} ('{snapshot.CharacterName}') -> '{path}'");
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to save snapshot for platform ID {snapshot.PlayerId}: {ex.Message}");
+                }
+            });
         }
 
         public static bool DeleteSnapshot(string playerId)
         {
-            string snapshotPath = SnapshotPath(playerId);
-            if (File.Exists(snapshotPath))
+            string path = SnapshotPath(playerId);
+            if (string.IsNullOrEmpty(path)) return false;
+
+            if (File.Exists(path))
             {
                 try
                 {
-                    File.Delete(snapshotPath);
+                    File.Delete(path);
                     Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Deleted snapshot file for platform ID {playerId}.");
                     return true;
                 }
                 catch (Exception ex)
                 {
                     Plugin.Log.LogError($"[CharacterVault :: DataStore] Failed to delete snapshot for {playerId}: {ex.Message}");
+                    return false;
                 }
             }
+
             return false;
         }
 
@@ -135,18 +161,19 @@ namespace CharacterVault.Systems
 
         public static bool WipePlayerData(string playerId)
         {
-            bool wiped = DeleteSnapshot(playerId);
+            bool snapshotDeleted = DeleteSnapshot(playerId);
 
             var bindings = LoadBindings();
+            bool bindingRemoved = false;
             if (bindings.ContainsKey(playerId))
             {
                 bindings.Remove(playerId);
                 SaveBindings(bindings);
                 Plugin.Log.LogInfo($"[CharacterVault :: DataStore] Wipe: removed character binding for platform ID {playerId}.");
-                wiped = true;
+                bindingRemoved = true;
             }
 
-            return wiped;
+            return snapshotDeleted || bindingRemoved;
         }
 
         private static void WriteAllTextAtomically(string path, string content)
@@ -155,15 +182,14 @@ namespace CharacterVault.Systems
             try
             {
                 File.WriteAllText(temporaryPath, content);
-                if (File.Exists(path))
-                    File.Replace(temporaryPath, path, null);
-                else
-                    File.Move(temporaryPath, path);
+                File.Copy(temporaryPath, path, overwrite: true);
             }
             finally
             {
                 if (File.Exists(temporaryPath))
-                    File.Delete(temporaryPath);
+                {
+                    try { File.Delete(temporaryPath); } catch { }
+                }
             }
         }
     }

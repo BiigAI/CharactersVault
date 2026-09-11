@@ -145,8 +145,10 @@ namespace CharacterVault.Systems
                 return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv reset Steam_76561198XXXXXXXXX</color>";
 
             string targetId = tokens[1];
-            bool wiped = DataStore.WipePlayerData(targetId);
-            BindingManager.Load();
+            if (!ZNetHelper.IsValidPlayerId(targetId))
+                return "<color=#FF4444>[CharactersVault]</color> Invalid player ID format. Example: <color=#33FF33>Steam_76561198XXXXXXXXX</color>";
+
+            bool wiped = BindingManager.WipePlayer(targetId);
 
             if (wiped)
             {
@@ -181,6 +183,9 @@ namespace CharacterVault.Systems
                 return "<color=#FFCC00>[CharactersVault]</color> Missing player ID. Example: <color=#33FF33>/cv status Steam_76561198XXXXXXXXX</color>";
 
             string targetId = tokens[1];
+            if (!ZNetHelper.IsValidPlayerId(targetId))
+                return "<color=#FF4444>[CharactersVault]</color> Invalid player ID format. Example: <color=#33FF33>Steam_76561198XXXXXXXXX</color>";
+
             var binding = BindingManager.GetRegisteredName(targetId);
             var snapshot = DataStore.LoadSnapshot(targetId);
 
